@@ -72,7 +72,7 @@ decoded byte against the CPU decoder. Results so far, geometric mean of the kern
 | GPU | driver | streams | vkdeflate, GB/s | Khronos layer, GB/s | vkdeflate / layer |
 |---|---|---|---|---|---|
 | AMD Radeon RX 6650 XT | AMD proprietary driver 26.10.1 (AMD proprietary shader compiler) | 12 | 9.0 | 5.8 | 1.5× |
-| AMD Radeon RX 9070 XT | AMD proprietary driver 26.10.1 (LLPC) | 12 | 8.0 |  |  |
+| AMD Radeon RX 9070 XT | AMD proprietary driver 26.10.1 (LLPC) | 12 | 10.4 |  |  |
 <!-- cards:end -->
 
 A card that is not in this table is the most useful thing you can add: open a pull request with your

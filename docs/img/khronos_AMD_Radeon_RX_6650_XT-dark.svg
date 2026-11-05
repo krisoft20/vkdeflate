@@ -28,52 +28,52 @@
 <line x1="700.0" y1="78.0" x2="700.0" y2="540.0" class="grid"/>
 <text x="700.0" y="556.0" class="m" font-size="11" font-weight="400" text-anchor="middle">4 ms</text>
 <text x="140.0" y="102.0" class="s" font-size="12" font-weight="400" text-anchor="end">mr</text>
-<path d="M150.0,84.0 H286.7 Q290.7,84.0 290.7,88.0 V93.0 Q290.7,97.0 286.7,97.0 H150.0 Z" class="c1"><title>mr, vkdeflate: 1.02 ms</title></path>
-<path d="M150.0,99.0 H512.3 Q516.3,99.0 516.3,103.0 V108.0 Q516.3,112.0 512.3,112.0 H150.0 Z" class="cg"><title>mr, Khronos layer: 2.66 ms</title></path>
-<text x="524.3" y="102.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.6×</text>
-<text x="140.0" y="140.0" class="s" font-size="12" font-weight="400" text-anchor="end">dickens</text>
-<path d="M150.0,122.0 H294.4 Q298.4,122.0 298.4,126.0 V131.0 Q298.4,135.0 294.4,135.0 H150.0 Z" class="c1"><title>dickens, vkdeflate: 1.08 ms</title></path>
-<path d="M150.0,137.0 H514.0 Q518.0,137.0 518.0,141.0 V146.0 Q518.0,150.0 514.0,150.0 H150.0 Z" class="cg"><title>dickens, Khronos layer: 2.68 ms</title></path>
-<text x="526.0" y="140.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.5×</text>
-<text x="140.0" y="178.0" class="s" font-size="12" font-weight="400" text-anchor="end">x-ray</text>
-<path d="M150.0,160.0 H339.7 Q343.7,160.0 343.7,164.0 V169.0 Q343.7,173.0 339.7,173.0 H150.0 Z" class="c1"><title>x-ray, vkdeflate: 1.41 ms</title></path>
-<path d="M150.0,175.0 H620.6 Q624.6,175.0 624.6,179.0 V184.0 Q624.6,188.0 620.6,188.0 H150.0 Z" class="cg"><title>x-ray, Khronos layer: 3.45 ms</title></path>
-<text x="632.6" y="178.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.4×</text>
+<path d="M150.0,84.0 H284.2 Q288.2,84.0 288.2,88.0 V93.0 Q288.2,97.0 284.2,97.0 H150.0 Z" class="c1"><title>mr, vkdeflate: 1 ms</title></path>
+<path d="M150.0,99.0 H506.9 Q510.9,99.0 510.9,103.0 V108.0 Q510.9,112.0 506.9,112.0 H150.0 Z" class="cg"><title>mr, Khronos layer: 2.62 ms</title></path>
+<text x="518.9" y="102.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.6×</text>
+<text x="140.0" y="140.0" class="s" font-size="12" font-weight="400" text-anchor="end">x-ray</text>
+<path d="M150.0,122.0 H339.2 Q343.2,122.0 343.2,126.0 V131.0 Q343.2,135.0 339.2,135.0 H150.0 Z" class="c1"><title>x-ray, vkdeflate: 1.41 ms</title></path>
+<path d="M150.0,137.0 H627.0 Q631.0,137.0 631.0,141.0 V146.0 Q631.0,150.0 627.0,150.0 H150.0 Z" class="cg"><title>x-ray, Khronos layer: 3.5 ms</title></path>
+<text x="639.0" y="140.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.5×</text>
+<text x="140.0" y="178.0" class="s" font-size="12" font-weight="400" text-anchor="end">dickens</text>
+<path d="M150.0,160.0 H293.4 Q297.4,160.0 297.4,164.0 V169.0 Q297.4,173.0 293.4,173.0 H150.0 Z" class="c1"><title>dickens, vkdeflate: 1.07 ms</title></path>
+<path d="M150.0,175.0 H510.7 Q514.7,175.0 514.7,179.0 V184.0 Q514.7,188.0 510.7,188.0 H150.0 Z" class="cg"><title>dickens, Khronos layer: 2.65 ms</title></path>
+<text x="522.7" y="178.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.5×</text>
 <text x="140.0" y="216.0" class="s" font-size="12" font-weight="400" text-anchor="end">samba</text>
-<path d="M150.0,198.0 H309.4 Q313.4,198.0 313.4,202.0 V207.0 Q313.4,211.0 309.4,211.0 H150.0 Z" class="c1"><title>samba, vkdeflate: 1.19 ms</title></path>
-<path d="M150.0,213.0 H420.2 Q424.2,213.0 424.2,217.0 V222.0 Q424.2,226.0 420.2,226.0 H150.0 Z" class="cg"><title>samba, Khronos layer: 1.99 ms</title></path>
-<text x="432.2" y="216.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.7×</text>
+<path d="M150.0,198.0 H310.6 Q314.6,198.0 314.6,202.0 V207.0 Q314.6,211.0 310.6,211.0 H150.0 Z" class="c1"><title>samba, vkdeflate: 1.2 ms</title></path>
+<path d="M150.0,213.0 H424.3 Q428.3,213.0 428.3,217.0 V222.0 Q428.3,226.0 424.3,226.0 H150.0 Z" class="cg"><title>samba, Khronos layer: 2.02 ms</title></path>
+<text x="436.3" y="216.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.7×</text>
 <text x="140.0" y="254.0" class="s" font-size="12" font-weight="400" text-anchor="end">reymont</text>
-<path d="M150.0,236.0 H292.2 Q296.2,236.0 296.2,240.0 V245.0 Q296.2,249.0 292.2,249.0 H150.0 Z" class="c1"><title>reymont, vkdeflate: 1.06 ms</title></path>
-<path d="M150.0,251.0 H389.8 Q393.8,251.0 393.8,255.0 V260.0 Q393.8,264.0 389.8,264.0 H150.0 Z" class="cg"><title>reymont, Khronos layer: 1.77 ms</title></path>
-<text x="401.8" y="254.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.7×</text>
+<path d="M150.0,236.0 H293.0 Q297.0,236.0 297.0,240.0 V245.0 Q297.0,249.0 293.0,249.0 H150.0 Z" class="c1"><title>reymont, vkdeflate: 1.07 ms</title></path>
+<path d="M150.0,251.0 H387.7 Q391.7,251.0 391.7,255.0 V260.0 Q391.7,264.0 387.7,264.0 H150.0 Z" class="cg"><title>reymont, Khronos layer: 1.76 ms</title></path>
+<text x="399.7" y="254.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.6×</text>
 <text x="140.0" y="292.0" class="s" font-size="12" font-weight="400" text-anchor="end">sao</text>
-<path d="M150.0,274.0 H348.3 Q352.3,274.0 352.3,278.0 V283.0 Q352.3,287.0 348.3,287.0 H150.0 Z" class="c1"><title>sao, vkdeflate: 1.47 ms</title></path>
+<path d="M150.0,274.0 H347.6 Q351.6,274.0 351.6,278.0 V283.0 Q351.6,287.0 347.6,287.0 H150.0 Z" class="c1"><title>sao, vkdeflate: 1.47 ms</title></path>
 <path d="M150.0,289.0 H453.2 Q457.2,289.0 457.2,293.0 V298.0 Q457.2,302.0 453.2,302.0 H150.0 Z" class="cg"><title>sao, Khronos layer: 2.23 ms</title></path>
 <text x="465.2" y="292.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.5×</text>
-<text x="140.0" y="330.0" class="s" font-size="12" font-weight="400" text-anchor="end">ooffice</text>
-<path d="M150.0,312.0 H392.7 Q396.7,312.0 396.7,316.0 V321.0 Q396.7,325.0 392.7,325.0 H150.0 Z" class="c1"><title>ooffice, vkdeflate: 1.79 ms</title></path>
-<path d="M150.0,327.0 H484.0 Q488.0,327.0 488.0,331.0 V336.0 Q488.0,340.0 484.0,340.0 H150.0 Z" class="cg"><title>ooffice, Khronos layer: 2.46 ms</title></path>
-<text x="496.0" y="330.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.4×</text>
-<text x="140.0" y="368.0" class="s" font-size="12" font-weight="400" text-anchor="end">xml</text>
-<path d="M150.0,350.0 H286.0 Q290.0,350.0 290.0,354.0 V359.0 Q290.0,363.0 286.0,363.0 H150.0 Z" class="c1"><title>xml, vkdeflate: 1.02 ms</title></path>
-<path d="M150.0,365.0 H336.6 Q340.6,365.0 340.6,369.0 V374.0 Q340.6,378.0 336.6,378.0 H150.0 Z" class="cg"><title>xml, Khronos layer: 1.39 ms</title></path>
-<text x="348.6" y="368.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.4×</text>
-<text x="140.0" y="406.0" class="s" font-size="12" font-weight="400" text-anchor="end">webster</text>
-<path d="M150.0,388.0 H538.7 Q542.7,388.0 542.7,392.0 V397.0 Q542.7,401.0 538.7,401.0 H150.0 Z" class="c1"><title>webster, vkdeflate: 2.86 ms</title></path>
-<path d="M150.0,403.0 H622.0 Q626.0,403.0 626.0,407.0 V412.0 Q626.0,416.0 622.0,416.0 H150.0 Z" class="cg"><title>webster, Khronos layer: 3.46 ms</title></path>
-<text x="634.0" y="406.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.2×</text>
-<text x="140.0" y="444.0" class="s" font-size="12" font-weight="400" text-anchor="end">mozilla</text>
-<path d="M150.0,426.0 H580.4 Q584.4,426.0 584.4,430.0 V435.0 Q584.4,439.0 580.4,439.0 H150.0 Z" class="c1"><title>mozilla, vkdeflate: 3.16 ms</title></path>
-<path d="M150.0,441.0 H634.8 Q638.8,441.0 638.8,445.0 V450.0 Q638.8,454.0 634.8,454.0 H150.0 Z" class="cg"><title>mozilla, Khronos layer: 3.56 ms</title></path>
-<text x="646.8" y="444.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.1×</text>
+<text x="140.0" y="330.0" class="s" font-size="12" font-weight="400" text-anchor="end">xml</text>
+<path d="M150.0,312.0 H285.6 Q289.6,312.0 289.6,316.0 V321.0 Q289.6,325.0 285.6,325.0 H150.0 Z" class="c1"><title>xml, vkdeflate: 1.01 ms</title></path>
+<path d="M150.0,327.0 H336.0 Q340.0,327.0 340.0,331.0 V336.0 Q340.0,340.0 336.0,340.0 H150.0 Z" class="cg"><title>xml, Khronos layer: 1.38 ms</title></path>
+<text x="348.0" y="330.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.4×</text>
+<text x="140.0" y="368.0" class="s" font-size="12" font-weight="400" text-anchor="end">ooffice</text>
+<path d="M150.0,350.0 H389.0 Q393.0,350.0 393.0,354.0 V359.0 Q393.0,363.0 389.0,363.0 H150.0 Z" class="c1"><title>ooffice, vkdeflate: 1.77 ms</title></path>
+<path d="M150.0,365.0 H475.0 Q479.0,365.0 479.0,369.0 V374.0 Q479.0,378.0 475.0,378.0 H150.0 Z" class="cg"><title>ooffice, Khronos layer: 2.39 ms</title></path>
+<text x="487.0" y="368.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.4×</text>
+<text x="140.0" y="406.0" class="s" font-size="12" font-weight="400" text-anchor="end">mozilla</text>
+<path d="M150.0,388.0 H586.3 Q590.3,388.0 590.3,392.0 V397.0 Q590.3,401.0 586.3,401.0 H150.0 Z" class="c1"><title>mozilla, vkdeflate: 3.2 ms</title></path>
+<path d="M150.0,403.0 H635.9 Q639.9,403.0 639.9,407.0 V412.0 Q639.9,416.0 635.9,416.0 H150.0 Z" class="cg"><title>mozilla, Khronos layer: 3.56 ms</title></path>
+<text x="647.9" y="406.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.1×</text>
+<text x="140.0" y="444.0" class="s" font-size="12" font-weight="400" text-anchor="end">webster</text>
+<path d="M150.0,426.0 H557.0 Q561.0,426.0 561.0,430.0 V435.0 Q561.0,439.0 557.0,439.0 H150.0 Z" class="c1"><title>webster, vkdeflate: 2.99 ms</title></path>
+<path d="M150.0,441.0 H599.5 Q603.5,441.0 603.5,445.0 V450.0 Q603.5,454.0 599.5,454.0 H150.0 Z" class="cg"><title>webster, Khronos layer: 3.3 ms</title></path>
+<text x="611.5" y="444.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.1×</text>
 <text x="140.0" y="482.0" class="s" font-size="12" font-weight="400" text-anchor="end">nci</text>
-<path d="M150.0,464.0 H299.7 Q303.7,464.0 303.7,468.0 V473.0 Q303.7,477.0 299.7,477.0 H150.0 Z" class="c1"><title>nci, vkdeflate: 1.12 ms</title></path>
-<path d="M150.0,479.0 H313.9 Q317.9,479.0 317.9,483.0 V488.0 Q317.9,492.0 313.9,492.0 H150.0 Z" class="cg"><title>nci, Khronos layer: 1.22 ms</title></path>
-<text x="325.9" y="482.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.1×</text>
+<path d="M150.0,464.0 H298.1 Q302.1,464.0 302.1,468.0 V473.0 Q302.1,477.0 298.1,477.0 H150.0 Z" class="c1"><title>nci, vkdeflate: 1.11 ms</title></path>
+<path d="M150.0,479.0 H312.8 Q316.8,479.0 316.8,483.0 V488.0 Q316.8,492.0 312.8,492.0 H150.0 Z" class="cg"><title>nci, Khronos layer: 1.21 ms</title></path>
+<text x="324.8" y="482.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.1×</text>
 <text x="140.0" y="520.0" class="s" font-size="12" font-weight="400" text-anchor="end">osdb</text>
-<path d="M150.0,502.0 H346.1 Q350.1,502.0 350.1,506.0 V511.0 Q350.1,515.0 346.1,515.0 H150.0 Z" class="c1"><title>osdb, vkdeflate: 1.46 ms</title></path>
-<path d="M150.0,517.0 H348.5 Q352.5,517.0 352.5,521.0 V526.0 Q352.5,530.0 348.5,530.0 H150.0 Z" class="cg"><title>osdb, Khronos layer: 1.47 ms</title></path>
-<text x="360.5" y="520.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.0×</text>
+<path d="M150.0,502.0 H344.3 Q348.3,502.0 348.3,506.0 V511.0 Q348.3,515.0 344.3,515.0 H150.0 Z" class="c1"><title>osdb, vkdeflate: 1.44 ms</title></path>
+<path d="M150.0,517.0 H347.2 Q351.2,517.0 351.2,521.0 V526.0 Q351.2,530.0 347.2,530.0 H150.0 Z" class="cg"><title>osdb, Khronos layer: 1.46 ms</title></path>
+<text x="359.2" y="520.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.0×</text>
 <line x1="150.0" y1="78.0" x2="150.0" y2="540.0" class="axis"/>
 </svg>

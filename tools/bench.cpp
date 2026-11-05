@@ -128,8 +128,8 @@ struct args_t {
     std::vector<std::string> files;
     std::string csv;
     std::string csvdir;
-    int rounds = 7;
-    int warm = 3;
+    int rounds = 30;
+    int warm = 10;
     bool direct = false;
     bool layer = true;
 };
