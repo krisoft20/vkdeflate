@@ -1,13 +1,13 @@
 gpu,driver,stream,tiles,out_bytes,cpu1_ms,vkdeflate_ms,khronos_ms,vkdeflate_ok,khronos_ok
-AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),dickens.l6,156,10192446,113.80,1.060,,1,
-AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),mozilla.l6,782,51220480,524.60,1.750,,1,
-AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),mr.l6,153,9970564,94.10,0.960,,1,
-AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),nci.l6,512,33553445,144.90,0.770,,1,
-AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),ooffice.l6,94,6152192,84.80,1.860,,1,
-AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),osdb.l6,154,10085684,97.30,1.420,,1,
-AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),reymont.l6,102,6627202,59.80,1.090,,1,
-AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),samba.l6,330,21606400,164.10,1.150,,1,
-AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),sao.l6,111,7251944,111.40,1.460,,1,
-AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),webster.l6,633,41458703,380.00,1.400,,1,
-AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),x-ray.l6,130,8474240,130.90,1.380,,1,
-AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),xml.l6,82,5345280,24.40,1.090,,1,
+AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),dickens.l6,156,10192446,110.99,1.066,1.821,1,1
+AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),mozilla.l6,782,51220480,501.43,1.775,2.131,1,1
+AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),mr.l6,153,9970564,93.26,0.984,1.849,1,1
+AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),nci.l6,512,33553445,142.05,0.790,0.722,1,1
+AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),ooffice.l6,94,6152192,80.62,1.862,2.074,1,1
+AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),osdb.l6,154,10085684,93.94,1.427,1.049,1,1
+AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),reymont.l6,102,6627202,58.16,1.122,1.319,1,1
+AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),samba.l6,330,21606400,154.75,1.176,1.474,1,1
+AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),sao.l6,111,7251944,109.32,1.481,1.736,1,1
+AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),webster.l6,633,41458703,377.29,1.430,1.875,1,1
+AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),x-ray.l6,130,8474240,128.50,1.379,2.546,1,1
+AMD Radeon RX 9070 XT,AMD proprietary driver 26.10.1 (LLPC),xml.l6,82,5345280,24.96,1.129,1.242,1,1
