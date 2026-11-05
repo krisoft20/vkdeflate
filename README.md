@@ -58,7 +58,8 @@ compress with the reference encoder, which `bench.cmd` builds as `third_party_bu
 
 ## Benchmark it on your card
 
-Windows with Visual Studio's C++ tools, git, and `glslc` from the Vulkan SDK.
+Windows with Visual Studio's C++ and CMake tools, and git. The Vulkan SDK is not needed: the compiled shader is in
+the repository and the build fetches Khronos's Vulkan headers if it finds none.
 
     .\build.cmd
     .\bench.cmd            the Silesia corpus on your GPU, written to results\<gpu>.csv
@@ -104,6 +105,7 @@ No code was copied from any of these; the decoders are written from `docs/FORMAT
 | NVIDIA nvCOMP documentation, GDeflate page | the same format prose | copyright NVIDIA, no stated license |
 | Khronos reference pages for `VK_EXT_memory_decompression` | what a decompression region is | Khronos, CC BY 4.0 |
 | Khronos `Vulkan-ExtensionLayer`, `layers/decompression` (`decompression.cpp`, `TileDecoder.glsl`) | the layer's calling contract for `tools/bench.cpp` (one raw tile per region, the indirect path), nothing of its decoder | Apache-2.0 or MIT |
+| Khronos `Vulkan-Headers`, tag v1.4.357 | fetched into `third_party_build` when the build finds no Vulkan headers; not part of this repository | Apache-2.0 or MIT |
 | RFC 1951 | DEFLATE | IETF |
 
 ## License

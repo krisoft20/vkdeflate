@@ -87,7 +87,7 @@ Specialization constants, one binary for all.
     build\gdz.exe file.gdz -info                             blocks, matches, code lengths
     build\gdz.exe file.gdz -trace N                          matches covering output byte N
     build\gdz.exe file.gdz -gpu -v                           registers, shared memory, ISA
-    cmake --build build --target single_header               regenerate single_include\vkdeflate.h
+    cmake --build build --target single_header               regenerate single_include\vkdeflate.h, prebuilt\tile_spv.inc
     python tools\plot.py                                     redraw docs\img, refresh the README table
 
 After a change to `tile.comp`: suite, fuzz, `attach_test`, `single_header`.

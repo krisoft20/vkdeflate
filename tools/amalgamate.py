@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Builds single_include/vkdeflate.h from src/.
+"""Builds single_include/vkdeflate.h from src/, and prebuilt/tile_spv.inc from src/tile.comp.
 
 The declarations of gdeflate.h and vkdeflate.h come first; under VKDEFLATE_IMPLEMENTATION
 follow gdeflate.cpp and vkdeflate.cpp with the compiled shader inlined, so a user needs neither
-glslc nor this repository's build.
+glslc nor this repository's build. prebuilt/tile_spv.inc is the same compiled shader for a build
+of this repository on a machine without glslc; its first line carries the hash of tile.comp.
 
     python tools/amalgamate.py [--glslc path] [--out single_include/vkdeflate.h]
 """
 import argparse
+import hashlib
 import os
 import re
 import subprocess
@@ -86,6 +88,11 @@ def spirv(glslc):
             return f.read().strip()
 
 
+def tile_hash():
+    with open(os.path.join(ROOT, 'src', 'tile.comp'), 'rb') as f:
+        return hashlib.sha256(f.read().replace(b'\r', b'')).hexdigest()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--glslc')
@@ -98,7 +105,8 @@ def main():
                '#include "gdeflate.h"', '#include "vkdeflate.h"')
     for m in sorted(KEEP):
         gpu = swap(gpu, '#define %s\n' % m, '#ifndef %s\n#define %s\n#endif\n' % (m, m))
-    gpu = swap(gpu, '#include "tile_spv.inc"\n', spirv(find_glslc(a.glslc)) + '\n')
+    spv = spirv(find_glslc(a.glslc))
+    gpu = swap(gpu, '#include "tile_spv.inc"\n', spv + '\n')
 
     macros = []
     for m in re.findall(r'^#define (\w+)', cpu + gpu, re.M):
@@ -117,6 +125,12 @@ def main():
     with open(a.out, 'w', encoding='utf-8', newline='\n') as f:
         f.write(text)
     print('amalgamate: %s, %d bytes, %d lines' % (os.path.relpath(a.out, ROOT), len(text), text.count('\n')))
+
+    pre = os.path.join(ROOT, 'prebuilt', 'tile_spv.inc')
+    os.makedirs(os.path.dirname(pre), exist_ok=True)
+    with open(pre, 'w', encoding='utf-8', newline='\n') as f:
+        f.write('// src/tile.comp compiled by glslc, sha256 of the source %s\n%s\n' % (tile_hash(), spv))
+    print('amalgamate: %s, %d bytes' % (os.path.relpath(pre, ROOT), os.path.getsize(pre)))
 
 
 if __name__ == '__main__':

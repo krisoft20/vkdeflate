@@ -31,4 +31,6 @@ Open an issue with:
       cmake --build build --target single_header
       build\single_test.exe test\vectors\xml.l6.gdz
 
+- A change to `src\tile.comp` needs `glslc`, from the Vulkan SDK or as `-DGLSLC=path` in `VKDEFLATE_CMAKE_ARGS`.
+  `single_header` also refreshes `prebuilt\tile_spv.inc`; commit both.
 - A change that is meant to be faster comes with numbers: before and after, same streams, runs interleaved.
