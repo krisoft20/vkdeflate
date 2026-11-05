@@ -80,8 +80,8 @@ A card that is not in this table is the most useful thing you can add: open a pu
 
 ## Limits
 
-- Tested on two AMD GPUs, an RX 6650 XT and an RX 9070 XT. The subgroup-size-32 path and the features above are
-  checked at start-up, but nobody has run it on NVIDIA or Intel yet.
+- The subgroup-size-32 path and the features above are checked at start-up, but nobody has run it on NVIDIA or
+  Intel yet.
 - The rates are kernel time on the GPU. Into host memory the PCIe copy caps a stream at 3-6 GB/s; into GPU memory
   only the compressed bytes cross the bus.
 - A dispatch of fewer than about 100 tiles (6 MB) costs about 1 ms whatever its size. Batch streams into one
