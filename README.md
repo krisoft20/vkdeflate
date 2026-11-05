@@ -2,6 +2,10 @@
 
 GPU decompression of GDeflate for Vulkan on any vendor's card: one header, MIT, no driver extension, no layer.
 
+| **[Blog](docs/blog.md)** | **[Format](docs/FORMAT.md)** | **[Kernel](docs/DESIGN.md)** |
+|:---:|:---:|:---:|
+| how it was built and measured, with charts | GDeflate 1.0 on two pages | how the shader decodes a tile, and its knobs |
+
 GDeflate is the format behind DirectStorage and RTX IO. Vulkan has an extension for it,
 `VK_EXT_memory_decompression`, but so far only NVIDIA's driver is known to implement it. vkdeflate is a compute shader and a small
 host library that decode the same streams on AMD, Intel and anything else with Vulkan 1.3.
@@ -85,9 +89,8 @@ A card that is not in this table is the most useful thing you can add: open a pu
 
 ## More
 
-- [`docs/blog.md`](docs/blog.md): how it was built and measured, with charts.
-- [`docs/DESIGN.md`](docs/DESIGN.md): notes on the kernel, its knobs, the commands.
-- [`docs/FORMAT.md`](docs/FORMAT.md): GDeflate 1.0 on two pages. [`docs/notebook.md`](docs/notebook.md): what was tried and the numbers.
+- [`docs/notebook.md`](docs/notebook.md): what was tried and the numbers.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): how to send a result from your card.
 - `build\gdz.exe` decodes, validates and fuzzes; `build\attach_test.exe` uses the API on a device of its own.
 
 ## Sources and licenses
