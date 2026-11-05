@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 378" width="760" height="378" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<title id="t">Kernel time grows when fewer waves fit on a SIMD</title>
+<desc id="d">Line chart: kernel time rises as residency drops from 8 to 2 waves per SIMD, for three streams.</desc>
+<style>
+.bg{fill:#ffffff}.p{fill:#0b0b0b}.s{fill:#52514e}.m{fill:#898781}
+.grid{stroke:#e1e0d9;stroke-width:1}.axis{stroke:#c3c2b7;stroke-width:1}
+.c1{fill:#2a78d6}.c2{fill:#eb6834}.c3{fill:#1baf7a}.cg{fill:#898781}
+.l1{stroke:#2a78d6}.l2{stroke:#eb6834}.l3{stroke:#1baf7a}
+.o1{fill:#86b6ef}.o2{fill:#2a78d6}.o3{fill:#104281}
+.ring{stroke:#ffffff;stroke-width:2}
+.box{fill:#f4f3ef;stroke:#c3c2b7;stroke-width:1}.hi{fill:#cde2fb;stroke:#2a78d6;stroke-width:1}
+</style>
+<rect width="760" height="378" rx="8" class="bg"/>
+<text x="16.0" y="24.0" class="p" font-size="15" font-weight="600" text-anchor="start">Kernel time grows when fewer waves fit on a SIMD</text>
+<text x="16.0" y="43.0" class="s" font-size="12" font-weight="400" text-anchor="start">kernel ms against waves per SIMD (shared memory padded to lower residency), RX 6650 XT</text>
+<rect x="16.0" y="55.0" width="10.0" height="10.0" rx="2" class="c1"></rect>
+<text x="31.0" y="64.0" class="s" font-size="12" font-weight="400" text-anchor="start">mozilla, 512 tiles</text>
+<rect x="168.2" y="55.0" width="10.0" height="10.0" rx="2" class="c2"></rect>
+<text x="183.2" y="64.0" class="s" font-size="12" font-weight="400" text-anchor="start">provinces.bin, 3125 tiles</text>
+<rect x="365.2" y="55.0" width="10.0" height="10.0" rx="2" class="c3"></rect>
+<text x="380.2" y="64.0" class="s" font-size="12" font-weight="400" text-anchor="start">silesia, 2048 tiles</text>
+<line x1="56.0" y1="324.0" x2="590.0" y2="324.0" class="grid"/>
+<text x="48.0" y="328.0" class="m" font-size="11" font-weight="400" text-anchor="end">0</text>
+<line x1="56.0" y1="276.0" x2="590.0" y2="276.0" class="grid"/>
+<text x="48.0" y="280.0" class="m" font-size="11" font-weight="400" text-anchor="end">5</text>
+<line x1="56.0" y1="228.0" x2="590.0" y2="228.0" class="grid"/>
+<text x="48.0" y="232.0" class="m" font-size="11" font-weight="400" text-anchor="end">10</text>
+<line x1="56.0" y1="180.0" x2="590.0" y2="180.0" class="grid"/>
+<text x="48.0" y="184.0" class="m" font-size="11" font-weight="400" text-anchor="end">15</text>
+<line x1="56.0" y1="132.0" x2="590.0" y2="132.0" class="grid"/>
+<text x="48.0" y="136.0" class="m" font-size="11" font-weight="400" text-anchor="end">20</text>
+<line x1="56.0" y1="84.0" x2="590.0" y2="84.0" class="grid"/>
+<text x="48.0" y="88.0" class="m" font-size="11" font-weight="400" text-anchor="end">25</text>
+<text x="590.0" y="342.0" class="m" font-size="11" font-weight="400" text-anchor="middle">8</text>
+<text x="501.0" y="342.0" class="m" font-size="11" font-weight="400" text-anchor="middle">7</text>
+<text x="412.0" y="342.0" class="m" font-size="11" font-weight="400" text-anchor="middle">6</text>
+<text x="323.0" y="342.0" class="m" font-size="11" font-weight="400" text-anchor="middle">5</text>
+<text x="234.0" y="342.0" class="m" font-size="11" font-weight="400" text-anchor="middle">4</text>
+<text x="145.0" y="342.0" class="m" font-size="11" font-weight="400" text-anchor="middle">3</text>
+<text x="56.0" y="342.0" class="m" font-size="11" font-weight="400" text-anchor="middle">2</text>
+<polyline points="56.0,263.6 145.0,277.6 234.0,282.2 323.0,286.7 412.0,288.6 501.0,287.0 590.0,292.0" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" class="l1"/>
+<circle cx="56.0" cy="263.6" r="5" class="c1 ring"><title>mozilla, 512 tiles, 2 waves: 6.29 ms</title></circle>
+<circle cx="145.0" cy="277.6" r="5" class="c1 ring"><title>mozilla, 512 tiles, 3 waves: 4.83 ms</title></circle>
+<circle cx="234.0" cy="282.2" r="5" class="c1 ring"><title>mozilla, 512 tiles, 4 waves: 4.35 ms</title></circle>
+<circle cx="323.0" cy="286.7" r="5" class="c1 ring"><title>mozilla, 512 tiles, 5 waves: 3.89 ms</title></circle>
+<circle cx="412.0" cy="288.6" r="5" class="c1 ring"><title>mozilla, 512 tiles, 6 waves: 3.69 ms</title></circle>
+<circle cx="501.0" cy="287.0" r="5" class="c1 ring"><title>mozilla, 512 tiles, 7 waves: 3.85 ms</title></circle>
+<circle cx="590.0" cy="292.0" r="5" class="c1 ring"><title>mozilla, 512 tiles, 8 waves: 3.33 ms</title></circle>
+<text x="602.0" y="296.0" class="p" font-size="12" font-weight="400" text-anchor="start">3.33 ms, mozilla</text>
+<polyline points="56.0,224.9 145.0,244.7 234.0,252.4 323.0,260.3 412.0,265.4 501.0,266.2 590.0,271.7" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" class="l2"/>
+<circle cx="56.0" cy="224.9" r="5" class="c2 ring"><title>provinces.bin, 3125 tiles, 2 waves: 10.32 ms</title></circle>
+<circle cx="145.0" cy="244.7" r="5" class="c2 ring"><title>provinces.bin, 3125 tiles, 3 waves: 8.26 ms</title></circle>
+<circle cx="234.0" cy="252.4" r="5" class="c2 ring"><title>provinces.bin, 3125 tiles, 4 waves: 7.46 ms</title></circle>
+<circle cx="323.0" cy="260.3" r="5" class="c2 ring"><title>provinces.bin, 3125 tiles, 5 waves: 6.64 ms</title></circle>
+<circle cx="412.0" cy="265.4" r="5" class="c2 ring"><title>provinces.bin, 3125 tiles, 6 waves: 6.10 ms</title></circle>
+<circle cx="501.0" cy="266.2" r="5" class="c2 ring"><title>provinces.bin, 3125 tiles, 7 waves: 6.02 ms</title></circle>
+<circle cx="590.0" cy="271.7" r="5" class="c2 ring"><title>provinces.bin, 3125 tiles, 8 waves: 5.45 ms</title></circle>
+<text x="602.0" y="275.7" class="p" font-size="12" font-weight="400" text-anchor="start">5.45 ms, provinces.bin</text>
+<polyline points="56.0,106.8 145.0,168.6 234.0,188.8 323.0,209.7 412.0,219.6 501.0,212.3 590.0,237.0" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" class="l3"/>
+<circle cx="56.0" cy="106.8" r="5" class="c3 ring"><title>silesia, 2048 tiles, 2 waves: 22.63 ms</title></circle>
+<circle cx="145.0" cy="168.6" r="5" class="c3 ring"><title>silesia, 2048 tiles, 3 waves: 16.19 ms</title></circle>
+<circle cx="234.0" cy="188.8" r="5" class="c3 ring"><title>silesia, 2048 tiles, 4 waves: 14.08 ms</title></circle>
+<circle cx="323.0" cy="209.7" r="5" class="c3 ring"><title>silesia, 2048 tiles, 5 waves: 11.91 ms</title></circle>
+<circle cx="412.0" cy="219.6" r="5" class="c3 ring"><title>silesia, 2048 tiles, 6 waves: 10.88 ms</title></circle>
+<circle cx="501.0" cy="212.3" r="5" class="c3 ring"><title>silesia, 2048 tiles, 7 waves: 11.64 ms</title></circle>
+<circle cx="590.0" cy="237.0" r="5" class="c3 ring"><title>silesia, 2048 tiles, 8 waves: 9.06 ms</title></circle>
+<text x="602.0" y="241.0" class="p" font-size="12" font-weight="400" text-anchor="start">9.06 ms, silesia</text>
+<line x1="56.0" y1="324.0" x2="590.0" y2="324.0" class="axis"/>
+<text x="323.0" y="364.0" class="s" font-size="12" font-weight="400" text-anchor="middle">waves resident per SIMD</text>
+</svg>

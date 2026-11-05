@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 250" width="760" height="250" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<title id="t">A GDeflate stream: tiles of 64 KB, 32 bitstreams in each</title>
+<desc id="d">Diagram: a stream is a row of independent 64 KB tiles; each tile interleaves 32 bitstreams.</desc>
+<style>
+.bg{fill:#ffffff}.p{fill:#0b0b0b}.s{fill:#52514e}.m{fill:#898781}
+.grid{stroke:#e1e0d9;stroke-width:1}.axis{stroke:#c3c2b7;stroke-width:1}
+.c1{fill:#2a78d6}.c2{fill:#eb6834}.c3{fill:#1baf7a}.cg{fill:#898781}
+.l1{stroke:#2a78d6}.l2{stroke:#eb6834}.l3{stroke:#1baf7a}
+.o1{fill:#86b6ef}.o2{fill:#2a78d6}.o3{fill:#104281}
+.ring{stroke:#ffffff;stroke-width:2}
+.box{fill:#f4f3ef;stroke:#c3c2b7;stroke-width:1}.hi{fill:#cde2fb;stroke:#2a78d6;stroke-width:1}
+</style>
+<rect width="760" height="250" rx="8" class="bg"/>
+<text x="16.0" y="24.0" class="p" font-size="15" font-weight="600" text-anchor="start">A GDeflate stream: tiles of 64 KB, 32 bitstreams in each</text>
+<text x="16.0" y="43.0" class="s" font-size="12" font-weight="400" text-anchor="start">tiles are independent of each other; inside a tile 32 bitstreams advance together</text>
+<text x="16.0" y="84.0" class="s" font-size="12" font-weight="400" text-anchor="start">stream</text>
+<rect x="80.0" y="68.0" width="74.0" height="26.0" rx="4" class="box"></rect>
+<text x="117.0" y="85.0" class="s" font-size="11" font-weight="400" text-anchor="middle">tile 0</text>
+<rect x="160.0" y="68.0" width="74.0" height="26.0" rx="4" class="box"></rect>
+<text x="197.0" y="85.0" class="s" font-size="11" font-weight="400" text-anchor="middle">tile 1</text>
+<rect x="240.0" y="68.0" width="74.0" height="26.0" rx="4" class="hi"></rect>
+<text x="277.0" y="85.0" class="s" font-size="11" font-weight="400" text-anchor="middle">tile 2</text>
+<rect x="320.0" y="68.0" width="74.0" height="26.0" rx="4" class="box"></rect>
+<text x="357.0" y="85.0" class="s" font-size="11" font-weight="400" text-anchor="middle">tile 3</text>
+<rect x="400.0" y="68.0" width="74.0" height="26.0" rx="4" class="box"></rect>
+<text x="437.0" y="85.0" class="s" font-size="11" font-weight="400" text-anchor="middle">tile 4</text>
+<rect x="480.0" y="68.0" width="74.0" height="26.0" rx="4" class="box"></rect>
+<text x="517.0" y="85.0" class="s" font-size="11" font-weight="400" text-anchor="middle">tile 5</text>
+<rect x="560.0" y="68.0" width="74.0" height="26.0" rx="4" class="box"></rect>
+<text x="597.0" y="85.0" class="s" font-size="11" font-weight="400" text-anchor="middle">tile 6</text>
+<rect x="640.0" y="68.0" width="74.0" height="26.0" rx="4" class="box"></rect>
+<text x="677.0" y="85.0" class="s" font-size="11" font-weight="400" text-anchor="middle">...</text>
+<line x1="240.0" y1="94.0" x2="80.0" y2="128.0" class="axis"/>
+<line x1="314.0" y1="94.0" x2="720.0" y2="128.0" class="axis"/>
+<text x="16.0" y="150.0" class="s" font-size="12" font-weight="400" text-anchor="start">one tile</text>
+<rect x="80.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="100.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="120.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="140.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="160.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="180.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="200.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="220.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="240.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="260.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="280.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="300.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="320.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="340.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="360.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="380.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="400.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="420.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="440.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="460.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="480.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="500.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="520.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="540.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="560.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="580.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="600.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="620.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="640.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="660.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<rect x="680.0" y="130.0" width="17.0" height="34.0" rx="2" class="hi"></rect>
+<rect x="700.0" y="130.0" width="17.0" height="34.0" rx="2" class="box"></rect>
+<text x="80.0" y="182.0" class="m" font-size="11" font-weight="400" text-anchor="start">lane 0</text>
+<text x="717.0" y="182.0" class="m" font-size="11" font-weight="400" text-anchor="end">lane 31</text>
+<text x="80.0" y="208.0" class="s" font-size="12" font-weight="400" text-anchor="start">32-bit packets round-robin over 32 lanes: one workgroup decodes one tile, one invocation one lane,</text>
+<text x="80.0" y="226.0" class="s" font-size="12" font-weight="400" text-anchor="start">32 symbols per round; matches may only point back inside the tile.</text>
+</svg>

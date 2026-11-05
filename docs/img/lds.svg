@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 388" width="760" height="388" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<title id="t">3 KB of shared memory against 4 KB and 2.5 KB</title>
+<desc id="d">Grouped bars: kernel time for 4 KB, 3 KB and 2.5 KB of shared memory on five streams.</desc>
+<style>
+.bg{fill:#ffffff}.p{fill:#0b0b0b}.s{fill:#52514e}.m{fill:#898781}
+.grid{stroke:#e1e0d9;stroke-width:1}.axis{stroke:#c3c2b7;stroke-width:1}
+.c1{fill:#2a78d6}.c2{fill:#eb6834}.c3{fill:#1baf7a}.cg{fill:#898781}
+.l1{stroke:#2a78d6}.l2{stroke:#eb6834}.l3{stroke:#1baf7a}
+.o1{fill:#86b6ef}.o2{fill:#2a78d6}.o3{fill:#104281}
+.ring{stroke:#ffffff;stroke-width:2}
+.box{fill:#f4f3ef;stroke:#c3c2b7;stroke-width:1}.hi{fill:#cde2fb;stroke:#2a78d6;stroke-width:1}
+</style>
+<rect width="760" height="388" rx="8" class="bg"/>
+<text x="16.0" y="24.0" class="p" font-size="15" font-weight="600" text-anchor="start">3 KB of shared memory against 4 KB and 2.5 KB</text>
+<text x="16.0" y="43.0" class="s" font-size="12" font-weight="400" text-anchor="start">kernel ms per stream (tiles) for three shared-memory budgets, RX 6650 XT</text>
+<rect x="16.0" y="55.0" width="10.0" height="10.0" rx="2" class="o1"></rect>
+<text x="31.0" y="64.0" class="s" font-size="12" font-weight="400" text-anchor="start">4 KB, 8 waves per SIMD</text>
+<rect x="193.8" y="55.0" width="10.0" height="10.0" rx="2" class="o2"></rect>
+<text x="208.8" y="64.0" class="s" font-size="12" font-weight="400" text-anchor="start">3 KB, 10 waves</text>
+<rect x="320.4" y="55.0" width="10.0" height="10.0" rx="2" class="o3"></rect>
+<text x="335.4" y="64.0" class="s" font-size="12" font-weight="400" text-anchor="start">2.5 KB, 12 waves</text>
+<line x1="56.0" y1="340.0" x2="740.0" y2="340.0" class="grid"/>
+<text x="48.0" y="344.0" class="m" font-size="11" font-weight="400" text-anchor="end">0</text>
+<line x1="56.0" y1="292.0" x2="740.0" y2="292.0" class="grid"/>
+<text x="48.0" y="296.0" class="m" font-size="11" font-weight="400" text-anchor="end">2</text>
+<line x1="56.0" y1="244.0" x2="740.0" y2="244.0" class="grid"/>
+<text x="48.0" y="248.0" class="m" font-size="11" font-weight="400" text-anchor="end">4</text>
+<line x1="56.0" y1="196.0" x2="740.0" y2="196.0" class="grid"/>
+<text x="48.0" y="200.0" class="m" font-size="11" font-weight="400" text-anchor="end">6</text>
+<line x1="56.0" y1="148.0" x2="740.0" y2="148.0" class="grid"/>
+<text x="48.0" y="152.0" class="m" font-size="11" font-weight="400" text-anchor="end">8</text>
+<line x1="56.0" y1="100.0" x2="740.0" y2="100.0" class="grid"/>
+<text x="48.0" y="104.0" class="m" font-size="11" font-weight="400" text-anchor="end">10</text>
+<path d="M92.4,340.0 V237.2 Q92.4,233.2 96.4,233.2 H108.4 Q112.4,233.2 112.4,237.2 V340.0 Z" class="o1"><title>mozilla (782), 4 KB, 8 waves per SIMD: 4.45 ms</title></path>
+<path d="M114.4,340.0 V238.2 Q114.4,234.2 118.4,234.2 H130.4 Q134.4,234.2 134.4,238.2 V340.0 Z" class="o2"><title>mozilla (782), 3 KB, 10 waves: 4.41 ms</title></path>
+<path d="M136.4,340.0 V234.8 Q136.4,230.8 140.4,230.8 H152.4 Q156.4,230.8 156.4,234.8 V340.0 Z" class="o3"><title>mozilla (782), 2.5 KB, 12 waves: 4.55 ms</title></path>
+<text x="124.4" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">mozilla (782)</text>
+<path d="M229.2,340.0 V239.8 Q229.2,235.8 233.2,235.8 H245.2 Q249.2,235.8 249.2,239.8 V340.0 Z" class="o1"><title>webster (633), 4 KB, 8 waves per SIMD: 4.34 ms</title></path>
+<path d="M251.2,340.0 V255.7 Q251.2,251.7 255.2,251.7 H267.2 Q271.2,251.7 271.2,255.7 V340.0 Z" class="o2"><title>webster (633), 3 KB, 10 waves: 3.68 ms</title></path>
+<path d="M273.2,340.0 V257.4 Q273.2,253.4 277.2,253.4 H289.2 Q293.2,253.4 293.2,257.4 V340.0 Z" class="o3"><title>webster (633), 2.5 KB, 12 waves: 3.61 ms</title></path>
+<text x="261.2" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">webster (633)</text>
+<path d="M366.0,340.0 V267.4 Q366.0,263.4 370.0,263.4 H382.0 Q386.0,263.4 386.0,267.4 V340.0 Z" class="o1"><title>skin.tex (704), 4 KB, 8 waves per SIMD: 3.19 ms</title></path>
+<path d="M388.0,340.0 V269.4 Q388.0,265.4 392.0,265.4 H404.0 Q408.0,265.4 408.0,269.4 V340.0 Z" class="o2"><title>skin.tex (704), 3 KB, 10 waves: 3.11 ms</title></path>
+<path d="M410.0,340.0 V267.0 Q410.0,263.0 414.0,263.0 H426.0 Q430.0,263.0 430.0,267.0 V340.0 Z" class="o3"><title>skin.tex (704), 2.5 KB, 12 waves: 3.21 ms</title></path>
+<text x="398.0" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">skin.tex (704)</text>
+<path d="M502.8,340.0 V123.0 Q502.8,119.0 506.8,119.0 H518.8 Q522.8,119.0 522.8,123.0 V340.0 Z" class="o1"><title>silesia (2048), 4 KB, 8 waves per SIMD: 9.21 ms</title></path>
+<path d="M524.8,340.0 V146.7 Q524.8,142.7 528.8,142.7 H540.8 Q544.8,142.7 544.8,146.7 V340.0 Z" class="o2"><title>silesia (2048), 3 KB, 10 waves: 8.22 ms</title></path>
+<path d="M546.8,340.0 V149.1 Q546.8,145.1 550.8,145.1 H562.8 Q566.8,145.1 566.8,149.1 V340.0 Z" class="o3"><title>silesia (2048), 2.5 KB, 12 waves: 8.12 ms</title></path>
+<text x="534.8" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">silesia (2048)</text>
+<path d="M639.6,340.0 V209.4 Q639.6,205.4 643.6,205.4 H655.6 Q659.6,205.4 659.6,209.4 V340.0 Z" class="o1"><title>provinces.bin (3126), 4 KB, 8 waves per SIMD: 5.61 ms</title></path>
+<path d="M661.6,340.0 V218.7 Q661.6,214.7 665.6,214.7 H677.6 Q681.6,214.7 681.6,218.7 V340.0 Z" class="o2"><title>provinces.bin (3126), 3 KB, 10 waves: 5.22 ms</title></path>
+<path d="M683.6,340.0 V216.8 Q683.6,212.8 687.6,212.8 H699.6 Q703.6,212.8 703.6,216.8 V340.0 Z" class="o3"><title>provinces.bin (3126), 2.5 KB, 12 waves: 5.3 ms</title></path>
+<text x="671.6" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">provinces.bin (3126)</text>
+<line x1="56.0" y1="340.0" x2="740.0" y2="340.0" class="axis"/>
+</svg>

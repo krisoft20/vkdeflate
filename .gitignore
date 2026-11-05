@@ -1,0 +1,8 @@
+build/
+third_party_build/
+test/vectors/
+*.gdz
+test/silesia/
+test/silesia.zip
+local.cmd
+vkdeflate_tile_*.txt
