@@ -3,7 +3,10 @@
 // can be loaded, with that layer too: the same device-local buffers, GPU timestamps around each
 // decoder, both outputs checked against the CPU decoder. Writes one csv row per stream.
 //
-//   bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct]
+//   bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-ms N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct]
+//
+// Every stream gets -warm rounds (10), then at least -rounds (30) and at least -ms milliseconds (500) of
+// measured rounds; the best one counts.
 //
 // The layer is found through VK_LAYER_PATH (the folder with VkLayer_khronos_memory_decompression.json).
 // -direct uses vkCmdDecompressMemoryNV (one dispatch per tile inside the layer) instead of the indirect
@@ -130,6 +133,7 @@ struct args_t {
     std::string csvdir;
     int rounds = 30;
     int warm = 10;
+    double min_ms = 500.0;
     bool direct = false;
     bool layer = true;
 };
@@ -464,7 +468,11 @@ static bool run_file(const args_t& a, vkdeflate::ctx_t* ctx, const std::string& 
     vkdeflate::job_t job = {src.addr, tiles.addr, dst_vk.addr, status.addr, n};
 
     double best_khr = 1e30, best_vk = 1e30;
-    for (int round = -a.warm; round < a.rounds; round++) {
+    auto measured = std::chrono::steady_clock::now();
+    auto spent = [&] { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - measured).count(); };
+    for (int round = -a.warm; round < a.rounds || spent() < a.min_ms; round++) {
+        if (round == 0)
+            measured = std::chrono::steady_clock::now();
         bool khr_first = (round & 1) == 0;
         begin();
         vkCmdResetQueryPool(cmd, queries, 0, 4);
@@ -568,6 +576,8 @@ int main(int argc, char** argv) {
             a.rounds = atoi(argv[++i]) < 1 ? 1 : atoi(argv[i]);
         else if (s == "-warm" && more)
             a.warm = atoi(argv[++i]) < 0 ? 0 : atoi(argv[i]);
+        else if (s == "-ms" && more)
+            a.min_ms = atof(argv[++i]);
         else if (s == "-csv" && more)
             a.csv = argv[++i];
         else if (s == "-csvdir" && more)
@@ -591,7 +601,7 @@ int main(int argc, char** argv) {
             a.files.push_back(s);
     }
     if (a.files.empty()) {
-        printf("usage: bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct]\n");
+        printf("usage: bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-ms N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct]\n");
         return 1;
     }
 
