@@ -106,9 +106,6 @@ No code was copied from any of these; the decoders are written from `docs/FORMAT
 | Khronos `Vulkan-ExtensionLayer`, `layers/decompression` (`decompression.cpp`, `TileDecoder.glsl`) | the layer's calling contract for `tools/bench.cpp` (one raw tile per region, the indirect path), nothing of its decoder | Apache-2.0 or MIT |
 | RFC 1951 | DEFLATE | IETF |
 
-The only code copied from anywhere is from the same author's zstdx (`gpu/gpuhuf.cpp`, `gpu/huf.comp`, MIT): the
-runtime Vulkan loader, the buffer and timestamp helpers.
-
 ## License
 
 MIT, see `LICENSE`. Copyright (c) 2026 krisoft20.

@@ -4,8 +4,7 @@
 // the Vulkan boilerplate: a per-context function table (loaded from vulkan-1.dll
 // through vkGetInstanceProcAddr for create(), from the caller's for attach()),
 // the device, the pipeline with its four push-constant addresses, the staging
-// buffers and timestamps of the host-to-host path. Loader pattern from zstdx's
-// gpu prototype.
+// buffers and timestamps of the host-to-host path.
 //
 // MIT License
 //
