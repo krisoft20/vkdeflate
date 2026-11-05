@@ -72,6 +72,7 @@ decoded byte against the CPU decoder. Results so far, geometric mean of the kern
 | GPU | driver | streams | vkdeflate, GB/s | Khronos layer, GB/s | vkdeflate / layer |
 |---|---|---|---|---|---|
 | AMD Radeon RX 6650 XT | AMD proprietary driver 26.10.1 (AMD proprietary shader compiler) | 12 | 9.0 | 5.8 | 1.5× |
+| AMD Radeon RX 9070 XT | AMD proprietary driver 26.10.1 (LLPC) | 12 | 8.0 |  |  |
 <!-- cards:end -->
 
 A card that is not in this table is the most useful thing you can add: open a pull request with your
@@ -79,8 +80,8 @@ A card that is not in this table is the most useful thing you can add: open a pu
 
 ## Limits
 
-- Tested on one GPU. The subgroup-size-32 path and the features above are checked at start-up, but nobody has run
-  it on NVIDIA or Intel yet.
+- Tested on two AMD GPUs, an RX 6650 XT and an RX 9070 XT. The subgroup-size-32 path and the features above are
+  checked at start-up, but nobody has run it on NVIDIA or Intel yet.
 - The rates are kernel time on the GPU. Into host memory the PCIe copy caps a stream at 3-6 GB/s; into GPU memory
   only the compressed bytes cross the bus.
 - A dispatch of fewer than about 100 tiles (6 MB) costs about 1 ms whatever its size. Batch streams into one
