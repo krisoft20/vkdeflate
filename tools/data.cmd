@@ -11,14 +11,16 @@ if not exist test\silesia mkdir test\silesia
 echo downloading the silesia corpus, 66 MB
 curl -L --fail -o test\silesia.zip https://sun.aei.polsl.pl/~sdeor/corpus/silesia.zip
 if errorlevel 1 exit /b 1
-tar -xf test\silesia.zip -C test\silesia
+"%SystemRoot%\System32\tar.exe" -xf test\silesia.zip -C test\silesia
 if errorlevel 1 exit /b 1
 del test\silesia.zip
 :have_corpus
 
 if exist third_party_build\DirectStorage\GDeflate\3rdparty\libdeflate\libdeflate.h goto :have_encoder
 echo cloning the gdeflate reference encoder
-git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/microsoft/DirectStorage third_party_build\DirectStorage
+if not exist third_party_build\DirectStorage\.git git clone --depth 1 https://github.com/microsoft/DirectStorage third_party_build\DirectStorage
+if errorlevel 1 exit /b 1
+git -C third_party_build\DirectStorage submodule update --init --depth 1 GDeflate/3rdparty/libdeflate
 if errorlevel 1 exit /b 1
 :have_encoder
 call "%~dp0gdref\build.cmd"
