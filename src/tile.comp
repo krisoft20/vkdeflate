@@ -30,7 +30,6 @@ layout(buffer_reference, std430, buffer_reference_align = 4) restrict readonly b
 layout(buffer_reference, std430, buffer_reference_align = 4) restrict readonly buffer tiles_ref { tile_t tiles[]; };
 layout(buffer_reference, std430, buffer_reference_align = 4) subgroupcoherent buffer dst_ref { uint8_t bytes[]; };
 layout(buffer_reference, std430, buffer_reference_align = 4) subgroupcoherent buffer dst32_ref { uint words[]; };
-layout(buffer_reference, std430, buffer_reference_align = 1) subgroupcoherent buffer dst8_ref { uint8_t bytes[]; };
 layout(buffer_reference, std430, buffer_reference_align = 4) restrict writeonly buffer status_ref { uint words[]; };
 
 layout(push_constant) uniform pc_t {
@@ -90,8 +89,6 @@ uint lane;
 uint lt_mask;
 uint g_zero;
 uint g_win;
-uint g_dst;
-uint64_t g_base;
 
 uint half_get(uint i) {
     return (lds_tab[i >> 1] >> ((i & 1u) << 4)) & 0xffffu;
@@ -120,50 +117,22 @@ void len_or(uint s, uint v) {
 }
 
 uint in_word(uint i) {
-    if (EXPERIMENT == 30)
-        return src_ref(uint64_t(pc.src) + uint64_t(i << 2)).words[0];
-    if (EXPERIMENT == 31 || EXPERIMENT == 32)
-        return pc.src.words[i & 0x3fffffffu];
     return pc.src.words[i];
 }
 
 uint out_get(uint i) {
-    if (EXPERIMENT == 30)
-        return uint(dst8_ref(uint64_t(pc.dst) + uint64_t(i)).bytes[0]);
-    if (EXPERIMENT == 31)
-        return uint(pc.dst.bytes[i & 0x7fffffffu]);
-    if (EXPERIMENT == 32)
-        return uint(dst_ref(g_base).bytes[(i - g_dst) & 0x7fffffffu]);
     return uint(pc.dst.bytes[i]);
 }
 
 void out_set(uint i, uint v) {
-    if (EXPERIMENT == 30)
-        dst8_ref(uint64_t(pc.dst) + uint64_t(i)).bytes[0] = uint8_t(v);
-    else if (EXPERIMENT == 31)
-        pc.dst.bytes[i & 0x7fffffffu] = uint8_t(v);
-    else if (EXPERIMENT == 32)
-        dst_ref(g_base).bytes[(i - g_dst) & 0x7fffffffu] = uint8_t(v);
-    else
-        pc.dst.bytes[i] = uint8_t(v);
+    pc.dst.bytes[i] = uint8_t(v);
 }
 
 void out_set32(uint i, uint v) {
-    if (EXPERIMENT == 30)
-        dst32_ref(uint64_t(pc.dst) + uint64_t(i & ~3u)).words[0] = v;
-    else if (EXPERIMENT == 32)
-        dst32_ref(g_base).words[(i - g_dst) >> 2] = v;
-    else
-        dst32_ref(uint64_t(pc.dst)).words[i >> 2] = v;
+    dst32_ref(uint64_t(pc.dst)).words[i >> 2] = v;
 }
 
 uint out_word(uint w) {
-    if (EXPERIMENT == 30)
-        return dst32_ref(uint64_t(pc.dst) + uint64_t(w << 2)).words[0];
-    if (EXPERIMENT == 31)
-        return dst32_ref(uint64_t(pc.dst)).words[w & 0x3fffffffu];
-    if (EXPERIMENT == 32)
-        return dst32_ref(g_base).words[(w - (g_dst >> 2)) & 0x3fffffffu];
     return dst32_ref(uint64_t(pc.dst)).words[w];
 }
 
@@ -741,8 +710,6 @@ void main() {
     tile_t t = pc.tiles.tiles[tile];
     g_zero = t.size >> 31;
     g_win = 0u;
-    g_dst = t.dst;
-    g_base = uint64_t(pc.dst) + uint64_t(t.dst);
     reader_t r;
     r.src = t.src;
     r.words = t.words;

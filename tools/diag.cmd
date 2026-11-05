@@ -3,7 +3,7 @@ setlocal
 cd /d %~dp0..
 rem Times the decoder with each kernel switch on five streams and saves what the shader compiler made of the
 rem kernel, for comparing GPUs and compilers. Run bench.cmd first: it builds the tools and the streams.
-rem Writes results\diag\diag.txt and results\diag\isa_x*.txt. Takes about two minutes.
+rem Writes results\diag\diag.txt and results\diag\isa.txt. Takes about a minute.
 call "%~dp0busy.cmd"
 if errorlevel 1 exit /b 1
 if not exist build\gdz.exe goto :need_bench
@@ -25,7 +25,7 @@ if errorlevel 1 exit /b 1
 del /q test\vectors\one_tile.all test\vectors\one_tile.bin
 :have_one
 
-for %%x in (0 30 31 32) do call :stats %%x
+call :stats
 >>%OUT% echo --- kernel ms, best of 200 rounds after 50 warm-up rounds
 for %%s in (one_tile dickens.l6 osdb.l6 nci.l6 mozilla.l6) do call :stream %%s
 type %OUT%
@@ -34,16 +34,13 @@ echo written to %D%, please send the whole folder
 exit /b 0
 
 :stats
->>%OUT% echo --- compiler statistics and a checked decode, -x %1
-build\gdz.exe test\vectors\mozilla.l6.gdz -gpu -v -x %1 | %FINDSTR% /l /c:"[vkdeflate]" /c:"matches" /c:"FAIL" >>%OUT%
-copy /y vkdeflate_tile_0.txt %D%\isa_x%1.txt >nul
+>>%OUT% echo --- compiler statistics and a checked decode
+build\gdz.exe test\vectors\mozilla.l6.gdz -gpu -v | %FINDSTR% /l /c:"[vkdeflate]" /c:"matches" /c:"FAIL" >>%OUT%
+copy /y vkdeflate_tile_0.txt %D%\isa.txt >nul
 exit /b 0
 
 :stream
 call :one %1 "-x 0"
-call :one %1 "-x 30"
-call :one %1 "-x 31"
-call :one %1 "-x 32"
 call :one %1 "-root 10"
 call :one %1 "-x 22 -ring 4"
 call :one %1 "-x 23"

@@ -24,7 +24,7 @@ Open an issue with:
     .\tools\diag.cmd
 
 It times every kernel switch on five streams and saves what the shader compiler made of the kernel. Send the
-`results\diag` folder. It needs a finished `bench.cmd` run and takes about two minutes.
+`results\diag` folder. It needs a finished `bench.cmd` run and takes about a minute.
 
 ## Changing the code
 

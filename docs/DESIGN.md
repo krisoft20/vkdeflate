@@ -77,9 +77,6 @@ Specialization constants, one binary for all.
 | `-x 11` | `experiment` | | device-scope fence instead of the subgroup barrier |
 | `-x 22` | | | no ring, with `-ring 4` |
 | `-x 23` | | | byte copies instead of dword copies |
-| `-x 30` | | | buffer addresses written out as base + 64-bit offset |
-| `-x 31` | | | buffer indices masked to 31 bits, for streams under 2 GB |
-| `-x 32` | | | per-tile base address and tile-relative indices |
 
 ## Commands
 

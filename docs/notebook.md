@@ -1,6 +1,7 @@
 # Notebook
 
-What was tried and what came out. One card: AMD Radeon RX 6650 XT, driver 26.10.1, Ryzen 5 5600X. Kernel time in ms
+What was tried and what came out. AMD Radeon RX 6650 XT, driver 26.10.1, Ryzen 5 5600X, except the table for the
+RX 9070 XT. Kernel time in ms
 on the GPU, best of several rounds, unless a row says otherwise. The machine was shared, so times move by 10 %
 between sessions; comparisons inside one table were run interleaved.
 
@@ -24,6 +25,7 @@ between sessions; comparisons inside one table were run interleaved.
 | 2.5 KB, ring 256, 12 waves | same as 3 KB | flag |
 | 2 KB, no ring, 7-bit distance root, 16 waves | mozilla-type data 10-30 % slower | flag |
 | dword copies for matches of 256 bytes and more | within noise, skin.tex 10 % faster in 2 of 3 runs | yes |
+| base + offset addressing for LLPC, RX 9070 XT | 175 fewer vector instructions there, one tile 0.98 to 0.99 | no |
 
 ## One tile
 
@@ -114,6 +116,24 @@ are also in `results/`.
 | zeros 32 MB (512) | 0.48 | 0.12 | 4.2 |
 
 The layer's direct path, one dispatch per tile: mozilla 3.50, provinces.bin 4.39, xml 1.69.
+
+## RX 9070 XT
+
+Driver 26.10.1 with the LLPC compiler; the RX 6650 XT's driver uses AMD's older one. One tile is from `gdz`, the
+rest from `bench`.
+
+| | RX 6650 XT | RX 9070 XT |
+|---|---|---|
+| vector registers, listing | 60, 279 KB | 90, 357 KB |
+| one tile of dickens | 0.93 | 0.98 |
+| dickens (156 tiles) | 1.07 | 1.03 |
+| osdb (154) | 1.44 | 1.40 |
+| nci (512) | 1.09 | 0.75 |
+| webster (633) | 3.02 | 1.39 |
+| mozilla (782) | 3.19 | 1.72 |
+| Khronos layer, dickens | 2.66 | 1.77 |
+| Khronos layer, osdb | 1.46 | 1.03 |
+| Khronos layer, mozilla | 3.56 | 2.06 |
 
 ## CPU and end to end
 
