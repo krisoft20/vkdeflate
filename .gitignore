@@ -6,3 +6,5 @@ test/silesia/
 test/silesia.zip
 local.cmd
 vkdeflate_tile_*.txt
+
+results/diag/

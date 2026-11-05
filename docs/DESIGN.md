@@ -77,6 +77,9 @@ Specialization constants, one binary for all.
 | `-x 11` | `experiment` | | device-scope fence instead of the subgroup barrier |
 | `-x 22` | | | no ring, with `-ring 4` |
 | `-x 23` | | | byte copies instead of dword copies |
+| `-x 30` | | | buffer addresses written out as base + 64-bit offset |
+| `-x 31` | | | buffer indices masked to 31 bits, for streams under 2 GB |
+| `-x 32` | | | per-tile base address and tile-relative indices |
 
 ## Commands
 
@@ -89,6 +92,7 @@ Specialization constants, one binary for all.
     build\gdz.exe file.gdz -gpu -v                           registers, shared memory, ISA
     cmake --build build --target single_header               regenerate single_include\vkdeflate.h, prebuilt\tile_spv.inc
     python tools\plot.py                                     redraw docs\img, refresh the README table
+    tools\diag.cmd                                           every switch on five streams, compiler statistics
 
 After a change to `tile.comp`: suite, fuzz, `attach_test`, `single_header`.
 

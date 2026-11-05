@@ -19,6 +19,13 @@ Open an issue with:
 - the last lines the script printed;
 - for a wrong byte or a tile error, the output of `build\gdz.exe test\vectors\<stream>.l6.gdz -gpu -v`.
 
+## Slower than it should be
+
+    .\tools\diag.cmd
+
+It times every kernel switch on five streams and saves what the shader compiler made of the kernel. Send the
+`results\diag` folder. It needs a finished `bench.cmd` run and takes about two minutes.
+
 ## Changing the code
 
 - Style: snake_case, `_t` types, no comments except `TODO`, small flat functions. Match the file you are in.
