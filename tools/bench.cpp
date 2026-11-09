@@ -37,6 +37,7 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 #define VK_NO_PROTOTYPES
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -128,6 +129,8 @@ struct buf_t {
 };
 
 struct args_t {
+    vkdeflate::config_t cfg;
+    uint32_t tile_count = 0;
     std::vector<std::string> files;
     std::string csv;
     std::string csvdir;
@@ -422,6 +425,37 @@ static bool run_file(const args_t& a, vkdeflate::ctx_t* ctx, const std::string& 
         printf("[bench] cant open %s\n", path.c_str());
         return false;
     }
+    if (a.tile_count != 0) {
+        gdeflate::stream_t stream;
+        std::string err;
+        if (!gdeflate::parse(in.data(), in.size(), stream, err)) {
+            printf("[bench] %s: %s\n", path.c_str(), err.c_str());
+            return false;
+        }
+        if (stream.tiles.empty() || stream.tiles[0].size != 65536) {
+            printf("[bench] -tile-count needs a full first tile\n");
+            return false;
+        }
+        const gdeflate::tile_t& tile = stream.tiles[0];
+        size_t head = 8 + 4 * (size_t)a.tile_count;
+        if (tile.csize * (uint64_t)a.tile_count + head > UINT32_MAX) {
+            printf("[bench] repeated stream exceeds 4 GB\n");
+            return false;
+        }
+        std::vector<uint8_t> repeated(head + tile.csize * a.tile_count);
+        repeated[0] = 4;
+        repeated[1] = 0xfb;
+        repeated[2] = (uint8_t)a.tile_count;
+        repeated[3] = (uint8_t)(a.tile_count >> 8);
+        repeated[4] = 1;
+        for (uint32_t i = 0; i < a.tile_count; i++) {
+            uint32_t entry = (uint32_t)(i ? i * tile.csize : tile.csize);
+            for (uint32_t b = 0; b < 4; b++)
+                repeated[8 + 4 * i + b] = (uint8_t)(entry >> (8 * b));
+            memcpy(repeated.data() + head + i * tile.csize, in.data() + tile.src, tile.csize);
+        }
+        in.swap(repeated);
+    }
     std::vector<vkdeflate::tile_desc_t> descs;
     size_t out_size = 0;
     std::string err;
@@ -438,6 +472,8 @@ static bool run_file(const args_t& a, vkdeflate::ctx_t* ctx, const std::string& 
     row.cpu_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     uint32_t n = (uint32_t)descs.size();
     row.stream = std::filesystem::path(path).stem().string();
+    if (a.tile_count != 0)
+        row.stream += ".tiles" + std::to_string(a.tile_count);
     row.tiles = n;
     row.out = out_size;
 
@@ -454,18 +490,21 @@ static bool run_file(const args_t& a, vkdeflate::ctx_t* ctx, const std::string& 
     memcpy(up.map, in.data(), in.size());
     memcpy(tiles.map, descs.data(), n * sizeof(vkdeflate::tile_desc_t));
     memset(status.map, 0xff, n * 4);
+    std::vector<vkdeflate::tile_desc_t> order = descs;
+    std::sort(order.begin(), order.end(),
+              [](const vkdeflate::tile_desc_t& a, const vkdeflate::tile_desc_t& b) { return a.dst < b.dst; });
     std::vector<VkDecompressMemoryRegionNV> regs(n);
     for (uint32_t i = 0; i < n; i++) {
-        regs[i].srcAddress = src.addr + 4ull * descs[i].src;
-        regs[i].dstAddress = dst_khr.addr + descs[i].dst;
-        regs[i].compressedSize = 4ull * descs[i].words;
-        regs[i].decompressedSize = descs[i].size;
+        regs[i].srcAddress = src.addr + 4ull * order[i].src;
+        regs[i].dstAddress = dst_khr.addr + order[i].dst;
+        regs[i].compressedSize = 4ull * order[i].words;
+        regs[i].decompressedSize = order[i].size;
         regs[i].decompressionMethod = VK_MEMORY_DECOMPRESSION_METHOD_GDEFLATE_1_0_BIT_NV;
     }
     memcpy(regions.map, regs.data(), n * sizeof(VkDecompressMemoryRegionNV));
     memcpy(count.map, &n, 4);
     copy(up, src, in_size);
-    vkdeflate::job_t job = {src.addr, tiles.addr, dst_vk.addr, status.addr, n};
+    vkdeflate::job_t job = {src.addr, tiles.addr, dst_vk.addr, status.addr, n, vkdeflate::job_flags(descs, out_size)};
 
     double best_khr = 1e30, best_vk = 1e30;
     auto measured = std::chrono::steady_clock::now();
@@ -578,6 +617,24 @@ int main(int argc, char** argv) {
             a.warm = atoi(argv[++i]) < 0 ? 0 : atoi(argv[i]);
         else if (s == "-ms" && more)
             a.min_ms = atof(argv[++i]);
+        else if (s == "-tile-count" && more) {
+            int count = atoi(argv[++i]);
+            if (count < 1 || count > 65535) {
+                printf("[bench] tile count must be between 1 and 65535\n");
+                return 1;
+            }
+            a.tile_count = (uint32_t)count;
+        }
+        else if (s == "-root" && more)
+            a.cfg.lit_root = (uint32_t)atoi(argv[++i]);
+        else if (s == "-droot" && more)
+            a.cfg.dist_root = (uint32_t)atoi(argv[++i]);
+        else if (s == "-ring" && more)
+            a.cfg.ring_bytes = (uint32_t)atoi(argv[++i]);
+        else if (s == "-pad" && more)
+            a.cfg.pad_bytes = (uint32_t)atoi(argv[++i]);
+        else if (s == "-x" && more)
+            a.cfg.experiment = (uint32_t)atoi(argv[++i]);
         else if (s == "-csv" && more)
             a.csv = argv[++i];
         else if (s == "-csvdir" && more)
@@ -601,12 +658,13 @@ int main(int argc, char** argv) {
             a.files.push_back(s);
     }
     if (a.files.empty()) {
-        printf("usage: bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-ms N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct]\n");
+        printf("usage: bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-ms N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct]\n"
+               "       [-root N] [-droot N] [-ring N] [-pad N] [-x N] [-tile-count N]\n");
         return 1;
     }
 
     make_device(a.layer);
-    vkdeflate::config_t cfg;
+    vkdeflate::config_t cfg = a.cfg;
     std::string err;
     vkdeflate::ctx_t* ctx = vkdeflate::attach(instance, phys, dev, vkGetInstanceProcAddr, cfg, err);
     if (!ctx) {

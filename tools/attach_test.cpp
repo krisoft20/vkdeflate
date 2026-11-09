@@ -299,7 +299,8 @@ int main(int argc, char** argv) {
                               VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT};
     vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &before, 0,
                          nullptr, 0, nullptr);
-    vkdeflate::job_t job = {src.addr, tiles.addr, dst.addr, status.addr, (uint32_t)descs.size()};
+    vkdeflate::job_t job = {src.addr, tiles.addr, dst.addr, status.addr, (uint32_t)descs.size(),
+                            vkdeflate::job_flags(descs, out_size)};
     vkdeflate::record(ctx, cmd, job);
     VkMemoryBarrier after = {VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_HOST_READ_BIT};
     vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &after, 0,

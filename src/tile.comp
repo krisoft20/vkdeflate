@@ -1,4 +1,5 @@
 #version 460
+#extension GL_EXT_control_flow_attributes : require
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_ballot : require
 #extension GL_KHR_shader_subgroup_vote : require
@@ -11,12 +12,13 @@
 #extension GL_KHR_memory_scope_semantics : require
 #pragma use_vulkan_memory_model
 
+
 layout(constant_id = 0) const uint GROUP = 32;
 layout(constant_id = 1) const uint EXPERIMENT = 0;
-layout(constant_id = 2) const uint RING = 2048;
+layout(constant_id = 2) const uint RING = 512;
 layout(constant_id = 3) const uint PAD = 0;
 layout(constant_id = 4) const uint LIT_ROOT = 9;
-layout(constant_id = 5) const uint DIST_ROOT = 8;
+layout(constant_id = 5) const uint DIST_ROOT = 7;
 layout(local_size_x_id = 0) in;
 
 struct tile_t {
@@ -30,6 +32,7 @@ layout(buffer_reference, std430, buffer_reference_align = 4) restrict readonly b
 layout(buffer_reference, std430, buffer_reference_align = 4) restrict readonly buffer tiles_ref { tile_t tiles[]; };
 layout(buffer_reference, std430, buffer_reference_align = 4) subgroupcoherent buffer dst_ref { uint8_t bytes[]; };
 layout(buffer_reference, std430, buffer_reference_align = 4) subgroupcoherent buffer dst32_ref { uint words[]; };
+layout(buffer_reference, std430, buffer_reference_align = 16) subgroupcoherent buffer dst128_ref { uvec4 q[]; };
 layout(buffer_reference, std430, buffer_reference_align = 4) restrict writeonly buffer status_ref { uint words[]; };
 
 layout(push_constant) uniform pc_t {
@@ -47,10 +50,9 @@ const uint TAB_PRE = TAB_DIST;
 const uint TAB_HALVES = (1u << LIT_ROOT) + (1u << DIST_ROOT);
 const uint SORTED_LIT = 0;
 const uint SORTED_DIST = 288;
-const uint SLOW_LIT = 0;
-const uint SLOW_DIST = 16u - LIT_ROOT;
 const uint LENS_PRE = 320;
 const uint NONE = 0xffffffffu;
+const uint QW = 128;
 
 const uint ERR_INPUT = 1;
 const uint ERR_BLOCK_TYPE = 2;
@@ -67,16 +69,14 @@ shared uint lds_tab[TAB_HALVES / 2];
 shared uint lds_sorted[107];
 shared uint lds_lens[43];
 shared uint lds_run[15];
-shared uint lds_slow[32u - LIT_ROOT - DIST_ROOT];
-shared uint8_t lds_ring[RING + PAD];
+shared uint lds_in[QW];
+shared uint8_t lds_ring[RING + PAD + 4u];
 
 struct reader_t {
     uint src;
     uint words;
     uint next;
-    uint base;
-    uint cur;
-    uint nxt;
+    uint wbase;
     uint err;
 };
 
@@ -89,6 +89,9 @@ uint lane;
 uint lt_mask;
 uint g_zero;
 uint g_win;
+bool g_mirror;
+bool g_cache;
+bool g_lits;
 
 uint half_get(uint i) {
     return (lds_tab[i >> 1] >> ((i & 1u) << 4)) & 0xffffu;
@@ -141,7 +144,7 @@ uint ring_get(uint x) {
 }
 
 void ring_set(uint x, uint v) {
-    if (x >= g_win && EXPERIMENT != 22)
+    if (x >= g_win && g_mirror && RING != 0u && EXPERIMENT != 22)
         lds_ring[x & (RING - 1u)] = uint8_t(v);
 }
 
@@ -149,25 +152,34 @@ uint load_packet(reader_t r, uint idx) {
     return in_word(r.src + min(idx, r.words - 1u));
 }
 
-void refill(inout reader_t r, inout lane_t l, bool need) {
+void shared_fence() {
+    controlBarrier(gl_ScopeSubgroup, gl_ScopeSubgroup, gl_StorageSemanticsShared, gl_SemanticsAcquireRelease);
+}
+
+void stage_sync(inout reader_t r) {
+    while (r.wbase - r.next < 64u) {
+        lds_in[(r.wbase + lane) & (QW - 1u)] = load_packet(r, r.wbase + lane);
+        r.wbase += LANES;
+        shared_fence();
+    }
+}
+
+void refill_staged(inout reader_t r, inout lane_t l, bool need) {
     need = need && l.cnt < 32u;
     uint b = subgroupBallot(need).x;
-    uint idx = r.next + bitCount(b & lt_mask);
-    uint rel = idx - r.base;
-    uint lo = subgroupShuffle(r.cur, rel & 31u);
-    uint hi = subgroupShuffle(r.nxt, rel & 31u);
+    uint w = lds_in[(r.next + bitCount(b & lt_mask)) & (QW - 1u)];
     if (need) {
-        l.buf |= uint64_t(rel < 32u ? lo : hi) << l.cnt;
+        l.buf |= uint64_t(w) << l.cnt;
         l.cnt += 32u;
     }
     r.next += bitCount(b);
     if (r.next > r.words)
         r.err = ERR_INPUT;
-    if (r.next >= r.base + 32u) {
-        r.base += 32u;
-        r.cur = r.nxt;
-        r.nxt = load_packet(r, r.base + 32u + lane);
-    }
+}
+
+void refill(inout reader_t r, inout lane_t l, bool need) {
+    refill_staged(r, l, need);
+    stage_sync(r);
 }
 
 void eat(inout lane_t l, uint n) {
@@ -175,7 +187,7 @@ void eat(inout lane_t l, uint n) {
     l.cnt -= n;
 }
 
-uint build(uint nsym, uint lens_at, uint tab, uint sbase, uint root, uint slow) {
+uint build(uint nsym, uint lens_at, uint tab, uint sbase, uint root, out uint p[8]) {
     uint entries = 1u << root;
     for (uint i = lane; i < entries / 2; i += LANES)
         lds_tab[(tab >> 1) + i] = 0u;
@@ -202,10 +214,15 @@ uint build(uint nsym, uint lens_at, uint tab, uint sbase, uint root, uint slow) 
     }
     uint kraft = subgroupAdd(mine ? cnt << (15u - lane) : 0u);
     uint single = subgroupShuffle(cnt, 1);
-    if (slow != NONE && mine && lane > root)
-        lds_slow[slow + (lane - root - 1u)] = first | (cnt << 16);
-    if (slow != NONE && lane == root + 1u)
-        lds_slow[slow + (15u - root)] = sbase + offs;
+    uint pk = ((mine ? (first + cnt) << (15u - lane) : 0u) << 16) | ((sbase + offs - first) & 0xffffu);
+    p[0] = subgroupBroadcast(pk, root + 1u);
+    p[1] = subgroupBroadcast(pk, root + 2u);
+    p[2] = subgroupBroadcast(pk, root + 3u);
+    p[3] = subgroupBroadcast(pk, root + 4u);
+    p[4] = subgroupBroadcast(pk, root + 5u);
+    p[5] = subgroupBroadcast(pk, root + 6u);
+    p[6] = subgroupBroadcast(pk, root + 7u);
+    p[7] = subgroupBroadcast(pk, root + 8u);
     subgroupBarrier();
     if (lane < 15)
         lds_run[lane] = 0u;
@@ -222,12 +239,14 @@ uint build(uint nsym, uint lens_at, uint tab, uint sbase, uint root, uint slow) 
     for (uint chunk = 0; chunk < nsym; chunk += LANES) {
         uint s = chunk + lane;
         uint l = s < nsym ? len_get(lens_at + s) : 0u;
-        uint b = 0;
-        for (uint lc = 1; lc <= 15; lc++) {
-            uint bb = subgroupBallot(l == lc).x;
-            if (l == lc)
-                b = bb;
-        }
+        uint b0 = subgroupBallot((l & 1u) != 0u).x;
+        uint b1 = subgroupBallot((l & 2u) != 0u).x;
+        uint b2 = subgroupBallot((l & 4u) != 0u).x;
+        uint b3 = subgroupBallot((l & 8u) != 0u).x;
+        uint b = ((l & 1u) != 0u ? b0 : ~b0)
+               & ((l & 2u) != 0u ? b1 : ~b1)
+               & ((l & 4u) != 0u ? b2 : ~b2)
+               & ((l & 8u) != 0u ? b3 : ~b3);
         uint rank = bitCount(b & lt_mask);
         uint run = l != 0u ? lds_run[max(l, 1u) - 1u] : 0u;
         uint fl = subgroupShuffle(first, l);
@@ -252,25 +271,53 @@ uint build(uint nsym, uint lens_at, uint tab, uint sbase, uint root, uint slow) 
     return mode;
 }
 
-uint decode(uint64_t buf, uint tab, uint root, uint slow, out uint len) {
+uint decode(uint64_t buf, uint tab, uint root, out uint len) {
     uint e = half_get(tab + (uint(buf) & ((1u << root) - 1u)));
     len = e >> 9;
-    uint sym = e & 511u;
-    if (len == 0u && slow != NONE) {
-        uint rev = bitfieldReverse(uint(buf));
-        uint o = lds_slow[slow + (15u - root)];
-        for (uint l = root + 1; l <= 15; l++) {
-            uint fc = lds_slow[slow + (l - root - 1u)];
-            uint r = (rev >> (32 - l)) - (fc & 0xffffu);
-            if (r < (fc >> 16)) {
-                sym = sorted_get(o + r);
-                len = l;
-                break;
-            }
-            o += fc >> 16;
-        }
+    return e & 511u;
+}
+
+uint long_code(uint c, uint p[8], uint root, out uint len) {
+    uint q = p[0];
+    uint n = root + 1u;
+    bool g;
+    if (root < 14u) {
+        g = c >= p[0];
+        q = g ? p[1] : q;
+        n += g ? 1u : 0u;
     }
-    return sym;
+    if (root < 13u) {
+        g = c >= p[1];
+        q = g ? p[2] : q;
+        n += g ? 1u : 0u;
+    }
+    if (root < 12u) {
+        g = c >= p[2];
+        q = g ? p[3] : q;
+        n += g ? 1u : 0u;
+    }
+    if (root < 11u) {
+        g = c >= p[3];
+        q = g ? p[4] : q;
+        n += g ? 1u : 0u;
+    }
+    if (root < 10u) {
+        g = c >= p[4];
+        q = g ? p[5] : q;
+        n += g ? 1u : 0u;
+    }
+    if (root < 9u) {
+        g = c >= p[5];
+        q = g ? p[6] : q;
+        n += g ? 1u : 0u;
+    }
+    if (root < 8u) {
+        g = c >= p[6];
+        q = g ? p[7] : q;
+        n += g ? 1u : 0u;
+    }
+    len = n;
+    return sorted_get(min((q + (c >> (31u - n))) & 0xffffu, 320u));
 }
 
 uint order_of(uint i) {
@@ -281,7 +328,7 @@ uint order_of(uint i) {
     return (i & 1u) == 0u ? 8u + ((i - 4u) >> 1) : 7u - ((i - 5u) >> 1);
 }
 
-uint dynamic_codes(inout reader_t r, inout lane_t l, out bool dist_empty) {
+uint dynamic_codes(inout reader_t r, inout lane_t l, out bool dist_empty, out uint lit_p[8], out uint dist_p[8]) {
     uint hdr = subgroupShuffle(uint(l.buf), 0);
     uint hlit = (hdr & 31u) + 257u;
     uint hdist = ((hdr >> 5) & 31u) + 1u;
@@ -303,7 +350,7 @@ uint dynamic_codes(inout reader_t r, inout lane_t l, out bool dist_empty) {
     }
     refill(r, l, alive);
     subgroupBarrier();
-    uint mode = build(19, LENS_PRE, TAB_PRE, NONE, PRE_ROOT, NONE);
+    uint mode = build(19, LENS_PRE, TAB_PRE, NONE, PRE_ROOT, lit_p);
     if (mode == 1 || mode == 3)
         return ERR_PRECODE;
 
@@ -312,7 +359,7 @@ uint dynamic_codes(inout reader_t r, inout lane_t l, out bool dist_empty) {
     uint last = NONE;
     while (n < total) {
         uint len;
-        uint sym = decode(l.buf, TAB_PRE, PRE_ROOT, NONE, len);
+        uint sym = decode(l.buf, TAB_PRE, PRE_ROOT, len);
         uint ext = sym < 16u ? 0u : sym == 16u ? 2u : sym == 17u ? 3u : 7u;
         uint base = sym < 16u ? 1u : sym == 18u ? 11u : 3u;
         uint runlen = base + ((uint(l.buf) >> len) & ((1u << ext) - 1u));
@@ -344,17 +391,26 @@ uint dynamic_codes(inout reader_t r, inout lane_t l, out bool dist_empty) {
     subgroupBarrier();
     if ((hlit > 286u && len_get(286) != 0u) || (hlit > 287u && len_get(287) != 0u) || len_get(256) == 0u)
         return ERR_LITLEN_CODE;
-    mode = build(hlit, 0, TAB_LIT, SORTED_LIT, LIT_ROOT, SLOW_LIT);
+    mode = build(hlit, 0, TAB_LIT, SORTED_LIT, LIT_ROOT, lit_p);
     if (mode == 1 || mode == 3)
         return ERR_LITLEN_CODE;
-    mode = build(hdist, hlit, TAB_DIST, SORTED_DIST, DIST_ROOT, SLOW_DIST);
+    mode = build(hdist, hlit, TAB_DIST, SORTED_DIST, DIST_ROOT, dist_p);
     if (mode == 3)
         return ERR_DIST_CODE;
     dist_empty = mode == 1;
+    uint dl = lane < hdist ? len_get(hlit + lane) : 0u;
+    uint near_weight = subgroupAdd(lane < 18u && dl != 0u ? 1u << (15u - dl) : 0u);
+    uint ll = lane < 29u && 257u + lane < hlit ? len_get(257u + lane) : 0u;
+    uint weight = ll != 0u ? 1u << (15u - ll) : 0u;
+    uint match_weight = subgroupAdd(weight);
+    uint long_weight = subgroupAdd(lane >= 14u ? weight : 0u);
+    g_cache = near_weight >= 6554u && long_weight * 4u < match_weight;
+    g_lits = match_weight < 2048u;
     return 0u;
 }
 
-void fixed_codes() {
+void fixed_codes(out uint pl[8], out uint pd[8]) {
+    g_cache = true;
     for (uint d = lane; d < 40; d += LANES) {
         uint w = 0;
         for (uint k = 0; k < 8; k++) {
@@ -365,8 +421,8 @@ void fixed_codes() {
         lds_lens[d] = w;
     }
     subgroupBarrier();
-    build(288, 0, TAB_LIT, SORTED_LIT, LIT_ROOT, SLOW_LIT);
-    build(32, 288, TAB_DIST, SORTED_DIST, DIST_ROOT, SLOW_DIST);
+    build(288, 0, TAB_LIT, SORTED_LIT, LIT_ROOT, pl);
+    build(32, 288, TAB_DIST, SORTED_DIST, DIST_ROOT, pd);
 }
 
 uint stored_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout uint pos) {
@@ -377,11 +433,34 @@ uint stored_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout u
     if (n > size - pos)
         return ERR_OUTPUT;
     g_win = pos + n >= RING ? pos + n - RING : 0u;
-    for (uint i = 0; i < n; i += LANES) {
+    uint phase = (l.cnt - 32u) >> 3;
+    uint b0 = subgroupBallot((phase & 1u) != 0u).x;
+    uint b1 = subgroupBallot((phase & 2u) != 0u).x;
+    uint same = ((phase & 1u) != 0u ? b0 : ~b0) & ((phase & 2u) != 0u ? b1 : ~b1);
+    uint before = phase == 0u ? 0u : phase == 1u ? ~(b0 | b1) : phase == 2u ? ~b1 : ~(b0 & b1);
+    uint rank = bitCount(before) + bitCount(same & lt_mask);
+    uint i = 0u;
+    for (; i + 4u * LANES <= n; i += 4u * LANES) {
+        uint v = uint(l.buf);
+        uint p = pos + i + lane;
+        out_set(dst + p, v & 255u);
+        out_set(dst + p + LANES, (v >> 8) & 255u);
+        out_set(dst + p + 2u * LANES, (v >> 16) & 255u);
+        out_set(dst + p + 3u * LANES, v >> 24);
+        uint w = in_word(r.src + min(r.next + rank, r.words - 1u));
+        l.buf = (l.buf >> 32) | (uint64_t(w) << (l.cnt - 32u));
+        r.next += LANES;
+        if (r.next > r.words) {
+            r.err = ERR_INPUT;
+            return r.err;
+        }
+    }
+    r.wbase = r.next;
+    stage_sync(r);
+    for (; i < n; i += LANES) {
         bool alive = i + lane < n;
         if (alive) {
             out_set(dst + pos + i + lane, uint(l.buf) & 0xffu);
-            ring_set(pos + i + lane, uint(l.buf) & 0xffu);
             eat(l, 8);
         }
         refill(r, l, alive);
@@ -400,32 +479,72 @@ void store_fence() {
 }
 
 void copy_own(uint dst, uint cp, uint cl, uint cd, uint longest) {
-    uint src = cp - cd;
-    for (uint i = 0; i < longest; i += 4) {
-        uint s0 = src;
-        uint s1 = s0 + 1u >= cp ? cp - cd : s0 + 1u;
-        uint s2 = s1 + 1u >= cp ? cp - cd : s1 + 1u;
-        uint s3 = s2 + 1u >= cp ? cp - cd : s2 + 1u;
-        src = s3 + 1u >= cp ? cp - cd : s3 + 1u;
-        uint v0 = out_get(dst + (i < cl ? s0 : cp));
-        uint v1 = out_get(dst + (i + 1u < cl ? s1 : cp));
-        uint v2 = out_get(dst + (i + 2u < cl ? s2 : cp));
-        uint v3 = out_get(dst + (i + 3u < cl ? s3 : cp));
+    uint src = cl != 0u ? dst + cp - cd : dst;
+    uint last = (src + max(cl, 1u) - 1u) >> 2;
+    uint shift = (src & 3u) * 8u;
+    uint words[7];
+    [[unroll]] for (uint i = 0; i < 7; i++) {
+        if (i * 4u < longest + 4u)
+            words[i] = out_word(min((src >> 2) + i, last));
+    }
+    [[unroll]] for (uint k = 0; k < 6; k++) {
+        if (k * 4u >= longest)
+            continue;
+        uint v = words[k];
+        if (shift != 0u)
+            v = (v >> shift) | (words[k + 1u] << (32u - shift));
+        uint i = k * 4u;
         if (i < cl) {
-            out_set(dst + cp + i, v0);
-            ring_set(cp + i, v0);
+            out_set(dst + cp + i, v & 255u);
+            ring_set(cp + i, v & 255u);
         }
         if (i + 1u < cl) {
-            out_set(dst + cp + i + 1u, v1);
-            ring_set(cp + i + 1u, v1);
+            out_set(dst + cp + i + 1u, (v >> 8) & 255u);
+            ring_set(cp + i + 1u, (v >> 8) & 255u);
         }
         if (i + 2u < cl) {
-            out_set(dst + cp + i + 2u, v2);
-            ring_set(cp + i + 2u, v2);
+            out_set(dst + cp + i + 2u, (v >> 16) & 255u);
+            ring_set(cp + i + 2u, (v >> 16) & 255u);
         }
         if (i + 3u < cl) {
-            out_set(dst + cp + i + 3u, v3);
-            ring_set(cp + i + 3u, v3);
+            out_set(dst + cp + i + 3u, v >> 24);
+            ring_set(cp + i + 3u, v >> 24);
+        }
+    }
+}
+
+void ring_any(uint x, uint lim, uint v) {
+    uint ri = x >= g_win && x < lim ? x & (RING - 1u) : RING;
+    lds_ring[ri] = uint8_t(v);
+}
+
+void copy_own_ovr(uint dst, uint cp, uint cl, uint cd, uint longest, uint lim) {
+    if (cl == 0u)
+        return;
+    uint src = dst + cp - cd;
+    uint last = (src + cl - 1u) >> 2;
+    uint shift = (src & 3u) * 8u;
+    uint words[7];
+    [[unroll]] for (uint i = 0; i < 7; i++) {
+        if (i * 4u < longest + 4u)
+            words[i] = out_word(min((src >> 2) + i, last));
+    }
+    [[unroll]] for (int k = 5; k >= 0; k--) {
+        if (uint(k) * 4u >= longest)
+            continue;
+        uint v = words[k];
+        if (shift != 0u)
+            v = (v >> shift) | (words[k + 1] << (32u - shift));
+        uint i = cp + uint(k) * 4u;
+        out_set(dst + i + 3u, v >> 24);
+        out_set(dst + i + 2u, (v >> 16) & 255u);
+        out_set(dst + i + 1u, (v >> 8) & 255u);
+        out_set(dst + i, v & 255u);
+        if (g_mirror && RING != 0u) {
+            ring_any(i + 3u, lim, v >> 24);
+            ring_any(i + 2u, lim, (v >> 16) & 255u);
+            ring_any(i + 1u, lim, (v >> 8) & 255u);
+            ring_any(i, lim, v & 255u);
         }
     }
 }
@@ -546,63 +665,125 @@ void copy_dwords(uint dst, uint cp, uint cl, uint cd) {
         out_set(dst + cp + head + body + lane, out_get(dst + cp + head + body + lane - cd));
 }
 
-void copy_one(uint dst, uint cp, uint cl, uint cd, inout pat_t q, bool mirror) {
-    if (cd <= 4u && !mirror) {
+void copy_one(uint dst, uint cp, uint cl, uint cd, inout pat_t q) {
+    if (cd <= 4u) {
         copy_pattern(dst, cp, cl, cd, q);
         return;
     }
     q.valid = false;
-    if (!mirror && cd >= 4u * LANES && cl >= 8u * LANES && EXPERIMENT != 23) {
+    if (cd >= 4u * LANES && cl >= 8u * LANES && EXPERIMENT != 23) {
         copy_dwords(dst, cp, cl, cd);
         return;
     }
     for (uint i0 = 0; i0 < cl; i0 += 4 * LANES) {
-        uint i1 = i0 + lane, i2 = i1 + LANES, i3 = i2 + LANES, i4 = i3 + LANES;
+        uint i1 = min(i0 + lane, cl - 1u), i2 = min(i0 + lane + LANES, cl - 1u);
+        uint i3 = min(i0 + lane + 2u * LANES, cl - 1u), i4 = min(i0 + lane + 3u * LANES, cl - 1u);
         uint j1 = i1, j2 = i2, j3 = i3, j4 = i4;
-        if (i0 + 4 * LANES > cd) {
+        if (cl > cd && i0 + 4 * LANES > cd) {
             j1 = i1 >= cd ? i1 % cd : i1;
             j2 = i2 >= cd ? i2 % cd : i2;
             j3 = i3 >= cd ? i3 % cd : i3;
             j4 = i4 >= cd ? i4 % cd : i4;
         }
-        uint v1 = out_get(dst + (i1 < cl ? cp - cd + j1 : cp));
-        uint v2 = out_get(dst + (i2 < cl ? cp - cd + j2 : cp));
-        uint v3 = out_get(dst + (i3 < cl ? cp - cd + j3 : cp));
-        uint v4 = out_get(dst + (i4 < cl ? cp - cd + j4 : cp));
-        if (i1 < cl)
-            out_set(dst + cp + i1, v1);
-        if (i2 < cl)
-            out_set(dst + cp + i2, v2);
-        if (i3 < cl)
-            out_set(dst + cp + i3, v3);
-        if (i4 < cl)
-            out_set(dst + cp + i4, v4);
-        if (mirror && i1 < cl)
-            ring_set(cp + i1, v1);
+        uint v1 = out_get(dst + cp - cd + j1);
+        uint v2 = out_get(dst + cp - cd + j2);
+        uint v3 = out_get(dst + cp - cd + j3);
+        uint v4 = out_get(dst + cp - cd + j4);
+        out_set(dst + cp + i1, v1);
+        out_set(dst + cp + i2, v2);
+        out_set(dst + cp + i3, v3);
+        out_set(dst + cp + i4, v4);
     }
+}
+
+void copy_pair(uint dst, uint ca, uint la, uint da, uint cb, uint lb, uint db) {
+    uint a1 = min(lane, la - 1u), a2 = min(lane + LANES, la - 1u);
+    uint a3 = min(lane + 2u * LANES, la - 1u), a4 = min(lane + 3u * LANES, la - 1u);
+    uint b1 = min(lane, lb - 1u), b2 = min(lane + LANES, lb - 1u);
+    uint b3 = min(lane + 2u * LANES, lb - 1u), b4 = min(lane + 3u * LANES, lb - 1u);
+    uint va1 = out_get(dst + ca - da + a1), va2 = out_get(dst + ca - da + a2);
+    uint va3 = out_get(dst + ca - da + a3), va4 = out_get(dst + ca - da + a4);
+    uint vb1 = out_get(dst + cb - db + b1), vb2 = out_get(dst + cb - db + b2);
+    uint vb3 = out_get(dst + cb - db + b3), vb4 = out_get(dst + cb - db + b4);
+    out_set(dst + ca + a1, va1);
+    out_set(dst + ca + a2, va2);
+    out_set(dst + ca + a3, va3);
+    out_set(dst + ca + a4, va4);
+    out_set(dst + cb + b1, vb1);
+    out_set(dst + cb + b2, vb2);
+    out_set(dst + cb + b3, vb3);
+    out_set(dst + cb + b4, vb4);
+}
+
+uint short_offset(uint i, uint dist) {
+    [[unroll]] for (int shift = 4; shift >= 0; shift--) {
+        uint step = dist << shift;
+        i -= i >= step ? step : 0u;
+    }
+    return i;
+}
+
+void copy_short(uint dst, uint cp, uint cl, uint cd) {
+    uint c = min(lane, cl - 1u);
+    uint j = cl > cd ? short_offset(c, cd) : c;
+    uint v = out_get(dst + cp - cd + j);
+    out_set(dst + cp + c, v);
+    ring_set(cp + c, v);
 }
 
 void copy_ring(uint dst, uint cp, uint cl, uint cd) {
-    if (lane < cl) {
-        uint j = lane >= cd ? lane % cd : lane;
-        uint v = ring_get(cp - cd + j);
-        out_set(dst + cp + lane, v);
-        ring_set(cp + lane, v);
-    }
+    uint c = min(lane, cl - 1u);
+    uint j = cl > cd ? short_offset(c, cd) : c;
+    uint v = ring_get(cp - cd + j);
+    out_set(dst + cp + c, v);
+    ring_set(cp + c, v);
 }
 
 uint huffman_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout uint pos, inout uint ring_from,
-                   bool dist_empty) {
+                   bool dist_empty, uint pl[8], uint pd[8], bool fast) {
     uint pend = 0, mpos = 0, mlen = 0;
     uint seg = pos;
     bool final_round = false;
+    uint plp = 0u, pls = 0u;
+    bool plv = false;
     for (;;) {
+        bool fetch = r.wbase - r.next < 64u;
+        uint fw = 0u;
+        if (fetch)
+            fw = load_packet(r, r.wbase + lane);
+        if (fast && !final_round && !subgroupAny(pend != 0u)) {
+            uint e = half_get(TAB_LIT + (uint(l.buf) & ((1u << LIT_ROOT) - 1u)));
+            uint flen = e >> 9;
+            uint fsym = e & 511u;
+            if (subgroupAll(flen != 0u && fsym < 256u) && pos + LANES <= size) {
+                eat(l, flen);
+                refill_staged(r, l, true);
+                uint p = pos + lane;
+                g_win = pos + LANES >= RING ? pos + LANES - RING : 0u;
+                out_set(dst + p, fsym);
+                ring_set(p, fsym);
+                seg = pos;
+                pos += LANES;
+                if (fetch) {
+                    lds_in[(r.wbase + lane) & (QW - 1u)] = fw;
+                    r.wbase += LANES;
+                    shared_fence();
+                }
+                continue;
+            }
+        }
         bool is_dist = pend != 0u;
         uint tab = is_dist ? TAB_DIST : TAB_LIT;
         uint root = is_dist ? DIST_ROOT : LIT_ROOT;
-        uint slow = is_dist ? SLOW_DIST : SLOW_LIT;
         uint len;
-        uint sym = decode(l.buf, tab, root, slow, len);
+        uint sym = decode(l.buf, tab, root, len);
+        if (len == 0u) {
+            uint c = (bitfieldReverse(uint(l.buf)) >> 1) | 0xffffu;
+            if (is_dist)
+                sym = long_code(c, pd, DIST_ROOT, len);
+            else
+                sym = long_code(c, pl, LIT_ROOT, len);
+        }
 
         uint k = is_dist ? 1u : 2u;
         uint n0 = 2u << k;
@@ -624,20 +805,22 @@ uint huffman_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout 
 
         uint eobmask = subgroupBallot(is_eob).x;
         bool alive = is_dist || (!final_round && (eobmask == 0u || lane <= uint(findLSB(eobmask))));
-        uint err = subgroupAny(bad && alive) ? ERR_SYMBOL : 0u;
+        bool fault = subgroupAny((bad && alive) || (is_dist && val > mpos));
         if (alive)
             eat(l, len + ext);
-        refill(r, l, alive);
+        refill_staged(r, l, alive);
 
         uint sz = (alive && !is_dist && !is_eob) ? val : 0u;
         uint off = subgroupExclusiveAdd(sz);
-        uint total = subgroupShuffle(off + sz, LANES - 1);
-        if (total > size - pos)
-            err = ERR_OUTPUT;
-        if (subgroupAny(is_dist && val > mpos))
-            err = ERR_DISTANCE;
-        if (err != 0u || r.err != 0u)
+        uint total = subgroupBroadcast(off + sz, LANES - 1);
+        if (fault || total > size - pos || r.err != 0u) {
+            uint err = subgroupAny(bad && alive) ? ERR_SYMBOL : 0u;
+            if (total > size - pos)
+                err = ERR_OUTPUT;
+            if (subgroupAny(is_dist && val > mpos))
+                err = ERR_DISTANCE;
             return err != 0u ? err : r.err;
+        }
         uint p = pos + off;
         g_win = pos + total >= RING ? pos + total - RING : 0u;
         if (alive && is_lit) {
@@ -649,18 +832,43 @@ uint huffman_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout 
             store_fence();
             uint ring_lo = max(g_win, ring_from);
             bool dep = is_dist && mpos - val + mlen > seg;
-            bool shortm = is_dist && !dep && mlen <= LANES;
+            bool shortm = is_dist && !dep && mlen <= 24u;
             uint longest = subgroupMax(shortm ? mlen : 0u);
+            if (longest != 0u && pos + 24u <= size) {
+                copy_own_ovr(dst, mpos, shortm ? mlen : 0u, val, longest, pos + total);
+                longest = 0u;
+                subgroupBarrier();
+                if (plv) {
+                    out_set(dst + plp, pls);
+                    ring_set(plp, pls);
+                }
+                if (alive && is_lit) {
+                    out_set(dst + p, sym);
+                    ring_set(p, sym);
+                }
+            }
             if (longest != 0u)
                 copy_own(dst, mpos, shortm ? mlen : 0u, val, longest);
             pat_t q;
             q.valid = false;
-            uint lmask = subgroupBallot(is_dist && !dep && mlen > LANES).x;
+            uint lmask = subgroupBallot(is_dist && !dep && mlen > 24u).x;
+            uint pmask = subgroupBallot(is_dist && !dep && mlen > 24u && mlen <= 4u * LANES && val >= mlen).x;
+            while (bitCount(pmask) >= 2u) {
+                uint ia = uint(findLSB(pmask));
+                pmask &= pmask - 1u;
+                uint ib = uint(findLSB(pmask));
+                pmask &= pmask - 1u;
+                lmask &= ~((1u << ia) | (1u << ib));
+                uint ca = subgroupShuffle(mpos, ia), cb = subgroupShuffle(mpos, ib);
+                uint la = subgroupShuffle(mlen, ia), lb = subgroupShuffle(mlen, ib);
+                copy_pair(dst, ca, la, subgroupShuffle(val, ia), cb, lb, subgroupShuffle(val, ib));
+                ring_from = max(ring_from, max(ca + la, cb + lb));
+            }
             while (lmask != 0u) {
                 uint i = uint(findLSB(lmask));
                 uint cp = subgroupShuffle(mpos, i);
                 uint cl = subgroupShuffle(mlen, i);
-                copy_one(dst, cp, cl, subgroupShuffle(val, i), q, false);
+                copy_one(dst, cp, cl, subgroupShuffle(val, i), q);
                 ring_from = max(ring_from, cp + cl);
                 lmask &= lmask - 1u;
             }
@@ -671,19 +879,25 @@ uint huffman_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout 
                 uint cl = subgroupShuffle(mlen, i);
                 uint cd = subgroupShuffle(val, i);
                 ring_lo = max(ring_lo, ring_from);
-                if (cl <= LANES && cp - cd >= ring_lo && EXPERIMENT != 22) {
+                if (cl <= LANES && cp - cd >= ring_lo && g_mirror && RING != 0u && EXPERIMENT != 22) {
                     subgroupBarrier();
                     copy_ring(dst, cp, cl, cd);
                 } else {
                     store_fence();
-                    copy_one(dst, cp, cl, cd, q, cl <= LANES);
-                    if (cl > LANES)
+                    if (cl <= LANES) {
+                        copy_short(dst, cp, cl, cd);
+                    } else {
+                        copy_one(dst, cp, cl, cd, q);
                         ring_from = max(ring_from, cp + cl);
+                    }
                 }
                 dmask &= dmask - 1u;
             }
         }
 
+        plp = p;
+        pls = sym;
+        plv = alive && is_lit;
         if (is_dist)
             pend = 0u;
         else if (alive && sym > 256u) {
@@ -693,6 +907,11 @@ uint huffman_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout 
         }
         seg = pos;
         pos += total;
+        if (fetch) {
+            lds_in[(r.wbase + lane) & (QW - 1u)] = fw;
+            r.wbase += LANES;
+            shared_fence();
+        }
         if (final_round)
             break;
         if (eobmask != 0u)
@@ -714,16 +933,17 @@ void main() {
     r.src = t.src;
     r.words = t.words;
     r.next = LANES;
-    r.base = LANES;
+    r.wbase = LANES;
     r.err = 0u;
     lane_t l;
     l.buf = uint64_t(in_word(r.src + lane));
     l.cnt = 32u;
-    r.cur = load_packet(r, LANES + lane);
-    r.nxt = load_packet(r, 2 * LANES + lane);
+    stage_sync(r);
     uint pos = 0u;
     uint ring_from = 0u;
     uint err = 0u;
+    uint pl[8];
+    uint pd[8];
 
     for (;;) {
         uint hdr = subgroupShuffle(uint(l.buf), 0);
@@ -738,16 +958,29 @@ void main() {
         }
         if (type == 0u) {
             err = stored_block(r, l, t.dst, t.size, pos);
+            ring_from = pos;
         } else if (type == 3u) {
             err = ERR_BLOCK_TYPE;
         } else {
             bool dist_empty = false;
             if (type == 2u)
-                err = dynamic_codes(r, l, dist_empty);
+                err = dynamic_codes(r, l, dist_empty, pl, pd);
             else
-                fixed_codes();
-            if (err == 0u)
-                err = huffman_block(r, l, t.dst, t.size, pos, ring_from, dist_empty);
+                fixed_codes(pl, pd);
+            if (err == 0u) {
+                if (g_cache && RING != 0u) {
+                    g_mirror = true;
+                    err = huffman_block(r, l, t.dst, t.size, pos, ring_from, dist_empty, pl, pd, false);
+                } else if (g_lits && type == 2u) {
+                    g_mirror = false;
+                    err = huffman_block(r, l, t.dst, t.size, pos, ring_from, dist_empty, pl, pd, true);
+                    ring_from = pos;
+                } else {
+                    g_mirror = false;
+                    err = huffman_block(r, l, t.dst, t.size, pos, ring_from, dist_empty, pl, pd, false);
+                    ring_from = pos;
+                }
+            }
         }
         if (err != 0u || final != 0u)
             break;

@@ -64,7 +64,8 @@ namespace vkdeflate {
         uint32_t ring_bytes = 512;
         uint32_t pad_bytes = 0;
         uint32_t lit_root = 9;
-        uint32_t dist_root = 8;
+        uint32_t dist_root = 7;
+        uint32_t runs_pad_bytes = 4608;
         bool verbose = false;
     };
 
@@ -92,7 +93,10 @@ namespace vkdeflate {
         VkDeviceAddress dst;
         VkDeviceAddress status;
         uint32_t num_tiles;
+        uint32_t flags = 0;
     };
+
+    inline constexpr uint32_t JOB_RUNS = 1;
 
     struct ctx_t;
 
@@ -105,6 +109,7 @@ namespace vkdeflate {
 
     bool describe(const uint8_t* p, size_t n, size_t stream_size, std::vector<tile_desc_t>& tiles, size_t& out_size,
                   std::string& err);
+    uint32_t job_flags(const std::vector<tile_desc_t>& tiles, size_t out_size);
     void record(ctx_t* ctx, VkCommandBuffer cmd, const job_t& job);
 
     bool decompress(ctx_t* ctx, const uint8_t* in, size_t n, uint8_t* out, size_t size, std::string& err,

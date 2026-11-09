@@ -63,12 +63,27 @@ namespace gdeflate {
         size_t rounds = 0;
         size_t long_codes = 0;
         size_t dep_matches = 0;
+        size_t dep_short = 0;
+        size_t ring_hits = 0;
+        size_t dep_free = 0;
+        size_t dep_free_rounds = 0;
+        size_t dep_chain_rounds = 0;
+        size_t own_steps = 0;
+        size_t own_bytes = 0;
+        size_t pol_on[8] = {};
+        size_t pol_served[8] = {};
+        size_t pol_tiles[8] = {};
         size_t dep_rounds = 0;
         size_t dist_hist[5] = {};
         size_t long_dist_hist[5] = {};
         size_t len_hist[16] = {};
         size_t dlen_hist[16] = {};
         size_t slow_rounds[3] = {};
+        size_t mrr_exact = 0;
+        size_t mrr_hwm = 0;
+        size_t dep_own = 0;
+        size_t lit_rounds = 0;
+        size_t far_hist[8] = {};
     };
 
     extern int g_ring_check;

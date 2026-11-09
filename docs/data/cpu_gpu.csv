@@ -1,7 +1,7 @@
 stream,out_mb,cpu1_ms,cpu6_ms,ref1_ms,gpu_kernel_ms,gpu_e2e_ms
-mozilla,51.2,307,63,148,4.57,14.0
-webster,41.5,225,49,125,3.73,11.2
-provinces.bin,204.8,249,49,88,5.15,33.0
-skin.tex,46.1,193,38,68,3.03,10.9
-human.portrait,55.6,295,60,148,4.37,14.3
-terrain_albedo.tex,39.1,450,97,147,3.61,14.2
+mozilla,51.2,307,63,148,2.27,12.8
+webster,41.5,225,49,125,1.82,10.1
+provinces.bin,204.8,249,49,88,2.43,34.0
+skin.tex,46.1,193,38,68,1.41,10.1
+human.portrait,55.6,295,60,148,2.75,13.6
+terrain_albedo.tex,39.1,450,97,147,1.74,13.5

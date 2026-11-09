@@ -32,20 +32,20 @@ is what I wrote down while reading them.
 One workgroup decodes one tile, one invocation owns one bitstream. Every round each lane decodes one symbol, a
 prefix sum over the lanes turns sizes into output positions, and literals are stored at once. Matches are copied a
 round later, when their distances are known. The first version that produced correct bytes took 14 ms for the 51 MB
-`mozilla` file; the one in this repository takes about 4.5 ms. The details are in [`DESIGN.md`](DESIGN.md).
+`mozilla` file, the first release 4.5 ms, the one in this repository 2.3 ms. The details are in [`DESIGN.md`](DESIGN.md).
 
-## One tile takes a millisecond
+## One tile takes half a millisecond or more
 
 I expected memory bandwidth to be the limit. It is nowhere near: the same kernel writes runs of zeros at
-140-200 GB/s on this card. Real data goes at 10-15 GB/s because a round is a chain of dependent table lookups, and
-a GPU core runs dependent chains slowly. I measured 0.2 to 0.3 instructions per cycle.
+140-200 GB/s on this card. Real data goes at 15-25 GB/s because a round is a chain of dependent table lookups,
+and a GPU core runs dependent chains slowly. I measured 0.2 to 0.3 instructions per cycle.
 
-A tile is 750 to 2000 such rounds in a row, about a microsecond each, and nothing in the format shortens that
-chain. So one tile takes about a millisecond however idle the GPU is, and so do eight.
+A tile is 750 to 2000 such rounds in a row, half a microsecond to a microsecond each, and nothing in the format
+shortens that chain. So one tile takes 0.6 to 1.2 ms however idle the GPU is, and so do thirty-two.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="img/saturation-dark.svg">
-  <img src="img/saturation.svg" alt="Output rate against tiles per dispatch: 0.08 GB/s at one tile, 7.5 GB/s at 512">
+  <img src="img/saturation.svg" alt="Output rate against tiles per dispatch: 0.12 GB/s at one tile, 20 GB/s at 512">
 </picture>
 
 For a game this means putting many small assets into one dispatch.
@@ -57,7 +57,7 @@ For a game this means putting many small assets into one dispatch.
 - **A 512-byte ring in shared memory.** Matches that read what the previous round just wrote had to go through
   global memory behind a barrier. A small mirror of the newest output removes that round trip: 10-14 % on binaries,
   and a loss of 5-8 % on plain text, which has few such matches.
-- **Less shared memory.** This was the one I did not see coming. The kernel's shared memory decides how many tiles
+- **Less shared memory.** The kernel's shared memory decides how many tiles
   a SIMD unit keeps in flight, and every slot counts once the GPU is full.
 
 <picture>
@@ -76,13 +76,12 @@ It doubles the rounds that fall back to the slow decode path, and it is still 7 
 ## What did not help
 
 - **Dword copies for long matches.** The textbook optimization: a quarter of the memory instructions. Three A/B
-  runs showed nothing outside the noise. Copies are not where a round spends its time.
+  runs showed nothing outside the noise. The cost of copies was somewhere else, as the second pass found.
 - **Going down to 2 KB by dropping the ring.** Sixteen waves per SIMD, and 10-30 % slower on binaries. The ring was
   worth more than the slots.
 - **Pipelining short copies across rounds.** The compiler waited anyway and the kernel grew by 17 registers.
 
-Each of these sounded right. I only know they are wrong because every experiment is a switch in one binary and
-every comparison is interleaved, best of several rounds, on a machine that swings by 10 % with whatever else is
+Every comparison is interleaved, best of several rounds, on a machine that swings by 10 % with whatever else is
 using the GPU.
 
 ## Three bugs the tests caught
@@ -110,10 +109,41 @@ buffer, same buffers, GPU timestamps around each, order alternating, both output
   <img src="img/khronos_all.svg" alt="Kernel time per stream, vkdeflate against the Khronos layer, fifteen streams">
 </picture>
 
-On large text streams the two are within a few percent, because both are the same chain of rounds. vkdeflate is
-1.3x faster on the map and on textures with long matches, about 2.4x on streams full of short dependent matches,
-and 4x on zeros. It loses by 6 % on one database dump. I tuned my kernel on this card, the other one
-was written by NVIDIA, and one card is all I have measured.
+The first release was within a few percent of the layer on large text, 1.3x faster on the map and on textures,
+and 6 % slower on one database dump. After the second pass below it is 1.5x to 1.9x faster on large text and
+textures, 2x to 4x on streams full of short matches, and 2x on the database dump. I tuned my kernel on this
+card; the other one was written by NVIDIA.
+
+## The second pass
+
+The slowest streams after the first release were a sound file, a font, the map and `mozilla`. The profiler I had,
+a shader clock read around each phase of a round, made the kernel four times slower and blamed the wrong phases.
+What worked was ablation: build a variant without one part, accept the wrong output, and time it. Taking out the
+own-lane copies of short matches halved the time of the database dump, the font and `dickens`. Keeping their
+loads and dropping only the stores still left 40 %. Making every lane write to the same 128-byte line changed
+nothing. The time went into 24 byte stores per lane, each behind its own test of whether that byte belongs to the
+match.
+
+- **Write past the end of the match.** Each lane writes the whole rounded-up block without a test, in descending
+  offsets, so a later match repairs what an earlier one spilled into it. The literals of the round and of the one
+  before are then stored again. 12 to 24 % on copy-heavy streams.
+- **Start the biggest tiles first.** The map's two heaviest tiles were the last two in the stream, and the GPU
+  waited for them at the end. Sorting the tile table by compressed size: 10 % on textures, 7 % on `mozilla`.
+- **Fewer tiles at once for the map.** The map is almost all long runs, and it got faster with 4 waves per SIMD
+  instead of 10: 3.0 to 2.4 ms. Every other stream got slower, so only streams compressed under 1/20 get that
+  pipeline.
+
+With those and a few smaller changes, on my card: the sound file 0.92 to 0.71 ms, the font 1.01 to 0.77 ms, the
+database dump 0.93 to 0.72 ms, the map 3.38 to 2.37 ms, `mozilla` 2.56 to 2.26 ms.
+
+A prefetch kept in registers never worked: the compiler copies the register at the end of the loop and waits for
+the load right there. A switch that only selects dead code moved the other variant's time by 10 to 15 %, so every
+comparison in this pass is two separate builds.
+
+On a friend's RX 9070 XT the same build is 1.19x to 2.8x faster than the layer. Small copy-heavy dispatches gained
+as much as on my card. Large textures gained nothing: the kernel now needs 191 vector registers on that compiler,
+fewer waves fit, and the layer is relatively faster there. Some large streams are 3-4 % slower there than with
+the previous version. I have no RDNA 4 card, so I cannot narrow this down or fix it.
 
 ## What I think
 
@@ -127,21 +157,18 @@ format a GPU can decode.
   <img src="img/cpu_gpu.svg" alt="GPU kernel, GPU end to end and CPU six threads in GB/s for six streams">
 </picture>
 
-The kernel decodes at 10 to 40 GB/s. If the result has to come back to host memory, the copy over PCIe brings that
+The kernel decodes at 20 to 85 GB/s. If the result has to come back to host memory, the copy over PCIe brings that
 down to 3 to 6 GB/s, which is what a few CPU threads of a good zstd decoder do. It makes sense when the data stays on the GPU and the
 GPU is otherwise idle, which means loading screens, or when CPU cores are the scarce thing. During gameplay it
 competes with rendering, and the DirectStorage titles that shipped with it show mixed results
 ([Ratchet & Clank](https://www.tomshardware.com/news/directstorage-bug-destroys-frame-rates-in-ratchet-and-clank-rift-apart),
 [Spider-Man 2](https://pcgamer.com/hardware/graphics-cards/spider-man-2s-pc-launch-woes-are-woe-ier-than-you-think-as-it-looks-like-gpu-powered-directstorage-is-hobbling-performance)).
 
-**For my own game it saves tens of milliseconds per large asset.** I built it anyway, because I wanted
-to know, and because the next person with an AMD card should not have to start from zero.
-
-**What I would tell myself at the start:** write the slow decoder first and make it match the reference byte for
-byte, and build the fuzzer before the first optimization.
+**For my own game it saves tens of milliseconds per large asset.**
 
 ## If you want to help
 
-It has run on one GPU. `bench.cmd` downloads the Silesia corpus, compresses it, decodes it on your card and writes a
+An RDNA 4 card is what this needs most right now: the kernel regressed there and I cannot measure it myself.
+It has run on two AMD GPUs. `bench.cmd` downloads the Silesia corpus, compresses it, decodes it on your card and writes a
 CSV; `bench.cmd -khr` adds the Khronos layer for comparison. A result from an NVIDIA or Intel card, or a failure,
 is worth more than anything else you could send.

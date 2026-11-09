@@ -30,6 +30,7 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 #define VK_NO_PROTOTYPES
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -159,8 +160,9 @@ struct ctx_t {
     uint32_t experiment = 0;
     uint32_t ring = 512;
     uint32_t pad = 0;
+    uint32_t runs_pad = 0;
     uint32_t lit_root = 9;
-    uint32_t dist_root = 8;
+    uint32_t dist_root = 7;
     bool verbose = false;
     bool stats = false;
     VkCommandPool pool = VK_NULL_HANDLE;
@@ -170,6 +172,7 @@ struct ctx_t {
     VkShaderModule shader = VK_NULL_HANDLE;
     VkPipelineLayout layout = VK_NULL_HANDLE;
     VkPipeline pipeline = VK_NULL_HANDLE;
+    VkPipeline pipeline_runs = VK_NULL_HANDLE;
     buf_t in, tiles, out, status, up, down;
     std::string err;
 };
@@ -430,6 +433,12 @@ static bool make_pipeline(ctx_t& g) {
     cpci.layout = g.layout;
     if ((r = g.f.vkCreateComputePipelines(g.dev, VK_NULL_HANDLE, 1, &cpci, nullptr, &g.pipeline)) != VK_SUCCESS)
         return fail(g, "vkCreateComputePipelines", r);
+    if (g.runs_pad) {
+        spec_data[3] = g.pad + g.runs_pad;
+        cpci.flags = 0;
+        if ((r = g.f.vkCreateComputePipelines(g.dev, VK_NULL_HANDLE, 1, &cpci, nullptr, &g.pipeline_runs)) != VK_SUCCESS)
+            return fail(g, "vkCreateComputePipelines", r);
+    }
     if (g.stats)
         print_stats(g);
     if (g.verbose)
@@ -536,6 +545,7 @@ ctx_t* create(const config_t& cfg, std::string& err) {
     g->experiment = cfg.experiment;
     g->ring = cfg.ring_bytes;
     g->pad = cfg.pad_bytes;
+    g->runs_pad = cfg.runs_pad_bytes;
     g->lit_root = cfg.lit_root;
     g->dist_root = cfg.dist_root;
     if (!init_device(*g, cfg) || !make_pipeline(*g)) {
@@ -553,6 +563,7 @@ ctx_t* attach(VkInstance instance, VkPhysicalDevice phys, VkDevice dev, PFN_vkGe
     g->experiment = cfg.experiment;
     g->ring = cfg.ring_bytes;
     g->pad = cfg.pad_bytes;
+    g->runs_pad = cfg.runs_pad_bytes;
     g->lit_root = cfg.lit_root;
     g->dist_root = cfg.dist_root;
     g->instance = instance;
@@ -590,6 +601,8 @@ void destroy(ctx_t* g) {
         free_buf(*g, g->down);
         if (g->pipeline)
             g->f.vkDestroyPipeline(g->dev, g->pipeline, nullptr);
+        if (g->pipeline_runs)
+            g->f.vkDestroyPipeline(g->dev, g->pipeline_runs, nullptr);
         if (g->layout)
             g->f.vkDestroyPipelineLayout(g->dev, g->layout, nullptr);
         if (g->shader)
@@ -633,15 +646,24 @@ bool describe(const uint8_t* p, size_t n, size_t stream_size, std::vector<tile_d
         }
         tiles[i] = tile_desc_t{(uint32_t)(t.src / 4), (uint32_t)(t.csize / 4), (uint32_t)t.dst, (uint32_t)t.size};
     }
+    std::stable_sort(tiles.begin(), tiles.end(), [](const tile_desc_t& a, const tile_desc_t& b) { return a.words > b.words; });
     out_size = s.total;
     return true;
+}
+
+uint32_t job_flags(const std::vector<tile_desc_t>& tiles, size_t out_size) {
+    uint64_t words = 0;
+    for (const tile_desc_t& t : tiles)
+        words += t.words;
+    return words * 4 * 20 < out_size ? JOB_RUNS : 0u;
 }
 
 void record(ctx_t* g, VkCommandBuffer cmd, const job_t& job) {
     if (!job.num_tiles)
         return;
     push_t pc = {job.src, job.tiles, job.dst, job.status};
-    g->f.vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, g->pipeline);
+    bool runs = (job.flags & JOB_RUNS) != 0 && g->pipeline_runs;
+    g->f.vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, runs ? g->pipeline_runs : g->pipeline);
     g->f.vkCmdPushConstants(cmd, g->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
     g->f.vkCmdDispatch(cmd, job.num_tiles, 1, 1);
 }
@@ -704,7 +726,7 @@ bool decompress(ctx_t* g, const uint8_t* in, size_t n, uint8_t* out, size_t size
     barrier(*g, cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
             VK_ACCESS_SHADER_READ_BIT);
     g->f.vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, g->queries, 1);
-    job_t job = {g->in.addr, g->tiles.addr, g->out.addr, g->status.addr, (uint32_t)descs.size()};
+    job_t job = {g->in.addr, g->tiles.addr, g->out.addr, g->status.addr, (uint32_t)descs.size(), job_flags(descs, total)};
     record(g, cmd, job);
     barrier(*g, cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
             VK_ACCESS_TRANSFER_READ_BIT);
@@ -738,7 +760,7 @@ bool decompress(ctx_t* g, const uint8_t* in, size_t n, uint8_t* out, size_t size
     const uint32_t* status = (const uint32_t*)((const uint8_t*)g->down.map + down_status);
     for (size_t i = 0; i < descs.size(); i++)
         if (status[i]) {
-            err = "tile " + std::to_string(i) + ": " + tile_error(status[i]);
+            err = "tile " + std::to_string(descs[i].dst / gdeflate::TILE_SIZE) + ": " + tile_error(status[i]);
             return false;
         }
     auto t3 = std::chrono::steady_clock::now();

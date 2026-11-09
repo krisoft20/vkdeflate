@@ -167,11 +167,12 @@ def chart_saturation():
     for (px, py), r in zip(pts, data):
         s.dot(px, py, 'c1', '%s tiles: %s GB/s, %s ms' % (r['tiles'], num(float(r['gbps'])), r['kernel_ms']))
         s.text(px, base + 18, r['tiles'], 'm', 11, 'middle')
-    s.text(pts[0][0] + 8, pts[0][1] - 14, '0.08 GB/s', 'p', 12)
-    s.text(pts[-1][0] + 10, pts[-1][1] + 4, '7.5 GB/s', 'p', 12)
+    s.text(pts[0][0] + 8, pts[0][1] - 14, '%s GB/s' % num(float(data[0]['gbps'])), 'p', 12)
+    s.text(pts[-1][0] + 10, pts[-1][1] + 4, '%s GB/s' % num(float(data[-1]['gbps']), 1), 'p', 12)
     s.line(left, base, W - right, base, 'axis')
     s.text((left + W - right) / 2, base + 40, 'tiles in one dispatch (64 KB each)', 's', 12, 'middle')
-    s.save('saturation.svg', 'Line chart: output rate grows from 0.08 GB/s at one tile to 7.5 GB/s at 512 tiles.')
+    s.save('saturation.svg', 'Line chart: output rate grows from %s GB/s at one tile to %s GB/s at 512 tiles.'
+           % (num(float(data[0]['gbps'])), num(float(data[-1]['gbps']), 1)))
 
 
 def chart_residency():

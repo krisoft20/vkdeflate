@@ -7,7 +7,8 @@ Close other programs that use the GPU, then:
     .\build.cmd
     .\bench.cmd -khr
 
-`bench.cmd` writes `results\<gpu>.csv`. Open a pull request with that file. `.\bench.cmd` without `-khr` skips the
+`bench.cmd` writes `results\<gpu>.csv`. Open a pull request with that file. Results from RDNA 4 cards
+(RX 9000 series) are wanted most: the kernel regressed there and I have no such card to test on. `.\bench.cmd` without `-khr` skips the
 Khronos layer and needs no python. The README table and the chart are redrawn from the CSV by
 `python tools\plot.py`; run it or leave it to me.
 

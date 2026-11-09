@@ -16,7 +16,8 @@ host library that decode the same streams on AMD, Intel and anything else with V
 </picture>
 
 Both decoders read the same buffers on the same card; the layer is Khronos's open implementation, with NVIDIA's
-shaders. How this was measured, and where it does not hold: [the write-up](docs/blog.md).
+shaders. On all 46 test streams vkdeflate is 1.56x to 4.2x faster on this card and 1.19x to 2.8x on an RX 9070 XT.
+How this was measured, and where it does not hold: [the write-up](docs/blog.md).
 
 **For you if**
 
@@ -47,8 +48,12 @@ size_t out_size;
 vkdeflate::describe(stream, header_bytes, stream_size, tiles, out_size, err);
 
 // the stream, the tile table, the output and one uint32_t of status per tile live in your buffers
-vkdeflate::record(ctx, cmd, {src_addr, tiles_addr, dst_addr, status_addr, (uint32_t)tiles.size()});
+vkdeflate::record(ctx, cmd, {src_addr, tiles_addr, dst_addr, status_addr, (uint32_t)tiles.size(),
+                             vkdeflate::job_flags(tiles, out_size)});
 ```
+
+`describe()` returns the tiles largest first, which shortens the dispatch; `status[i]` belongs to `tiles[i]`.
+`job_flags()` picks the pipeline for streams that are mostly long runs.
 
 `record()` is one dispatch in your command buffer. You own the barriers around it and read the status words
 (0 is good, `vkdeflate::tile_error()` names the rest). The device needs Vulkan 1.3 with `shaderInt64`, `shaderInt8`,
@@ -71,12 +76,12 @@ decoded byte against the CPU decoder. Results so far, geometric mean of the kern
 <!-- cards:begin -->
 | GPU | driver | streams | vkdeflate, GB/s | Khronos layer, GB/s | vkdeflate / layer |
 |---|---|---|---|---|---|
-| AMD Radeon RX 6650 XT | AMD proprietary driver 26.10.1 (AMD proprietary shader compiler) | 12 | 9.0 | 5.8 | 1.5× |
-| AMD Radeon RX 9070 XT | AMD proprietary driver 26.10.1 (LLPC) | 12 | 10.5 | 8.4 | 1.2× |
+| AMD Radeon RX 6650 XT | AMD proprietary driver 26.10.1 (AMD proprietary shader compiler) | 12 | 13.2 | 5.9 | 2.2× |
+| AMD Radeon RX 9070 XT | AMD proprietary driver 26.10.1 (LLPC) | 12 | 15.0 | 8.4 | 1.8× |
 <!-- cards:end -->
 
 A card that is not in this table is the most useful thing you can add: open a pull request with your
-`results\*.csv`.
+`results\*.csv`. RDNA 4 owners especially, see Limits.
 
 ## Limits
 
@@ -84,8 +89,11 @@ A card that is not in this table is the most useful thing you can add: open a pu
   Intel yet.
 - The rates are kernel time on the GPU. Into host memory the PCIe copy caps a stream at 3-6 GB/s; into GPU memory
   only the compressed bytes cross the bus.
-- A dispatch of fewer than about 100 tiles (6 MB) costs about 1 ms whatever its size. Batch streams into one
+- A dispatch of fewer than about 100 tiles (6 MB) costs 0.6 to 1 ms whatever its size. Batch streams into one
   command buffer.
+- RDNA 4 regressed: on an RX 9070 XT the kernel needs 191 vector registers (96 on RDNA2), and some large
+  dispatches are 3-4 % slower than with the previous version. Without an RDNA 4 card here this cannot be narrowed
+  down or fixed. Volunteers wanted: `bench.cmd -khr` and the CSV, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - No encoder. Windows scripts only; the CMake build has not been tried on Linux.
 - GDeflate compresses like zlib. zstd and Oodle pack tighter; the larger files are the price of a format a GPU can decode.
 

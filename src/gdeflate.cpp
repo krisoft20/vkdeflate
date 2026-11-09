@@ -51,6 +51,8 @@ constexpr uint8_t dist_extra[32] = {0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4,  4,  5,  5,
                                     7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14};
 
 int g_ring_check = 0;
+int g_pol[8][4] = {{256, 1024, 4096, 1}, {256, 2048, 8192, 1}, {128, 1024, 4096, 1}, {256, 512, 4096, 1},
+                   {512, 2048, 8192, 1}, {128, 2048, 8192, 1}, {256, 4096, 16384, 1}, {64, 1024, 4096, 1}};
 
 struct ring_t {
     std::vector<uint8_t> slot;
@@ -60,6 +62,13 @@ struct ring_t {
     size_t win = 0;
     size_t round = 0;
     bool reported = false;
+    size_t pol_until[8] = {};
+    size_t pol_limit[8] = {};
+    bool pol_mirror[8] = {};
+    size_t pol_phys[8] = {};
+    size_t prev_end = 0;
+    bool pol_was[8] = {};
+    size_t block_round = 0;
 };
 
 static void ring_write(ring_t& r, size_t x, uint8_t v, int32_t kind) {
@@ -364,6 +373,7 @@ static bool read_dist(tile_dec_t& t, int lane, const huff_t& dist, size_t at, ui
     if (t.st) {
         int bucket = d <= 1 ? 0 : d <= 4 ? 1 : d <= 32 ? 2 : d <= 128 ? 3 : 4;
         t.st->dist_hist[bucket]++;
+        t.st->far_hist[d <= 512 ? 0 : d <= 1024 ? 1 : d <= 2048 ? 2 : d <= 4096 ? 3 : d <= 8192 ? 4 : d <= 16384 ? 5 : d <= 32768 ? 6 : 7]++;
         if (len > LANES)
             t.st->long_dist_hist[bucket]++;
     }
@@ -392,12 +402,35 @@ static bool run_copies(tile_dec_t& t, std::vector<job_t>& jobs, size_t pos_end) 
         r.lits.clear();
         ring_lo = r.win > r.from ? r.win : r.from;
     }
+    size_t win = pos_end >= 512 ? pos_end - 512 : 0;
+    size_t lo = win > r.from ? win : r.from;
+    uint32_t hits = 0;
+    for (int k = 0; k < 8; k++) {
+        if (!r.pol_mirror[k]) {
+            r.pol_mirror[k] = r.prev_end < r.pol_limit[k];
+            if (r.pol_mirror[k]) {
+                r.pol_phys[k] = r.prev_end;
+                if (t.st)
+                    t.st->pol_tiles[k]++;
+            }
+        }
+        if (r.pol_mirror[k] && t.st)
+            t.st->pol_on[k]++;
+    }
+    r.block_round++;
+    uint32_t longest = 0;
     for (const job_t& j : jobs)
         if (!j.dep && j.len <= LANES) {
+            if (j.len > longest)
+                longest = j.len;
+            if (t.st)
+                t.st->own_bytes += j.len;
             copy(t, j.at, j.len, j.d);
             for (uint32_t k = 0; k < j.len; k++)
                 ring_write(r, j.at + k, t.out[j.at + k], 2);
         }
+    if (t.st)
+        t.st->own_steps += (longest + 3) / 4;
     for (const job_t& j : jobs)
         if (!j.dep && j.len > LANES) {
             copy(t, j.at, j.len, j.d);
@@ -407,11 +440,33 @@ static bool run_copies(tile_dec_t& t, std::vector<job_t>& jobs, size_t pos_end) 
                 for (uint32_t k = 0; k < j.len; k++)
                     r.mark[j.at + k] = -2;
         }
+    size_t dep_end = 0;
+    bool any_free = false, any_chain = false;
     for (const job_t& j : jobs) {
         if (!j.dep)
             continue;
+        if (j.len <= LANES) {
+            if (dep_end <= j.at - j.d) {
+                any_free = true;
+                if (t.st)
+                    t.st->dep_free++;
+            } else
+                any_chain = true;
+        }
+        if (j.at + j.len > dep_end)
+            dep_end = j.at + j.len;
         if (r.from > ring_lo)
             ring_lo = r.from;
+        if (r.from > lo)
+            lo = r.from;
+        if (j.len <= LANES && j.at - j.d >= lo) {
+            hits++;
+            if (t.st) {
+                t.st->ring_hits++;
+                for (int k = 0; k < 8; k++)
+                    t.st->pol_served[k] += r.pol_mirror[k] && j.at - j.d >= r.pol_phys[k];
+            }
+        }
         if (g_ring_check && j.len <= LANES && j.at - j.d >= ring_lo) {
             for (uint32_t k = 0; k < j.len && !r.reported; k++) {
                 size_t src = j.at - j.d + (k % j.d);
@@ -442,12 +497,59 @@ static bool run_copies(tile_dec_t& t, std::vector<job_t>& jobs, size_t pos_end) 
             }
         }
     }
+    for (int k = 0; k < 8; k++) {
+        if (!hits)
+            continue;
+        size_t e = (r.pol_until[k] > pos_end ? r.pol_until[k] : pos_end) + (size_t)g_pol[k][0] * hits;
+        if (e > pos_end + (size_t)g_pol[k][2])
+            e = pos_end + (size_t)g_pol[k][2];
+        r.pol_until[k] = e;
+        r.pol_limit[k] = e >= (size_t)g_pol[k][1] ? e - (size_t)g_pol[k][1] : 0;
+    }
+    if (t.st) {
+        std::vector<const job_t*> left;
+        for (const job_t& j : jobs)
+            if (j.dep) {
+                left.push_back(&j);
+                t.st->dep_own += j.len <= 24 && j.d >= j.len;
+            }
+        for (int mode = 0; mode < 2; mode++) {
+            std::vector<const job_t*> rem = left;
+            while (!rem.empty()) {
+                std::vector<const job_t*> next;
+                size_t hwm = rem[0]->at;
+                for (size_t a = 0; a < rem.size(); a++) {
+                    const job_t* i = rem[a];
+                    size_t s0 = i->at - i->d;
+                    size_t s1 = i->d >= i->len ? s0 + i->len : i->at;
+                    bool clash = false;
+                    if (mode == 1)
+                        clash = s1 > hwm;
+                    else
+                        for (size_t b = 0; b < a; b++)
+                            if (rem[b]->at < s1 && rem[b]->at + rem[b]->len > s0)
+                                clash = true;
+                    if (clash)
+                        next.push_back(i);
+                }
+                if (mode == 0)
+                    t.st->mrr_exact++;
+                else
+                    t.st->mrr_hwm++;
+                rem = next;
+            }
+        }
+        t.st->dep_free_rounds += any_free;
+        t.st->dep_chain_rounds += any_chain;
+    }
+    r.prev_end = pos_end;
     jobs.clear();
     return !t.fail;
 }
 
 static bool huffman_block(tile_dec_t& t, const huff_t& lit, const huff_t& dist) {
     bool pending[LANES] = {};
+    t.ring.block_round = 0;
     size_t match_at[LANES] = {};
     uint32_t match_len[LANES] = {};
     size_t prev_seg = 0, seg = t.pos;
@@ -463,6 +565,10 @@ static bool huffman_block(tile_dec_t& t, const huff_t& lit, const huff_t& dist) 
             t.dist_max = 0;
         }
         t.ring.round++;
+        size_t lits_before = t.st ? t.st->literals : 0;
+        bool any_pending = false;
+        for (int lane = 0; lane < (int)LANES; lane++)
+            any_pending |= pending[lane];
         for (int lane = 0; lane < (int)LANES; lane++) {
             if (pending[lane]) {
                 bool dep = false;
@@ -473,6 +579,7 @@ static bool huffman_block(tile_dec_t& t, const huff_t& lit, const huff_t& dist) 
                 pending[lane] = false;
                 if (t.st && dep) {
                     t.st->dep_matches++;
+                    t.st->dep_short += match_len[lane] <= LANES;
                     dep_round = true;
                 }
                 continue;
@@ -522,6 +629,8 @@ static bool huffman_block(tile_dec_t& t, const huff_t& lit, const huff_t& dist) 
         }
         if (t.fail)
             return false;
+        if (t.st && !any_pending && t.st->literals - lits_before == LANES)
+            t.st->lit_rounds++;
         if (!run_copies(t, jobs, t.pos))
             return false;
         if (t.st && dep_round)
@@ -541,8 +650,10 @@ static bool huffman_block(tile_dec_t& t, const huff_t& lit, const huff_t& dist) 
                 return false;
             jobs.push_back(job_t{lane, match_at[lane], match_len[lane], d, dep});
         }
-        if (t.st && dep)
+        if (t.st && dep) {
             t.st->dep_matches++;
+            t.st->dep_short += match_len[lane] <= LANES;
+        }
     }
     return run_copies(t, jobs, t.pos);
 }

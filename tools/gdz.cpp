@@ -64,7 +64,7 @@ struct args_t {
     uint32_t ring = 512;
     uint32_t pad = 0;
     uint32_t root = 9;
-    uint32_t droot = 8;
+    uint32_t droot = 7;
     bool verbose = false;
 };
 
@@ -192,6 +192,24 @@ static bool check_one(const args_t& a, const std::string& path, const std::strin
             st.rounds += one.rounds;
             st.long_codes += one.long_codes;
             st.dep_matches += one.dep_matches;
+            st.dep_short += one.dep_short;
+            st.ring_hits += one.ring_hits;
+            st.dep_free += one.dep_free;
+            st.dep_free_rounds += one.dep_free_rounds;
+            st.dep_chain_rounds += one.dep_chain_rounds;
+            st.mrr_exact += one.mrr_exact;
+            st.mrr_hwm += one.mrr_hwm;
+            st.dep_own += one.dep_own;
+            st.lit_rounds += one.lit_rounds;
+            for (int b = 0; b < 8; b++)
+                st.far_hist[b] += one.far_hist[b];
+            st.own_steps += one.own_steps;
+            st.own_bytes += one.own_bytes;
+            for (int k = 0; k < 8; k++) {
+                st.pol_on[k] += one.pol_on[k];
+                st.pol_served[k] += one.pol_served[k];
+                st.pol_tiles[k] += one.pol_tiles[k];
+            }
             st.dep_rounds += one.dep_rounds;
             for (int b = 0; b < 5; b++) {
                 st.dist_hist[b] += one.dist_hist[b];
@@ -216,9 +234,40 @@ static bool check_one(const args_t& a, const std::string& path, const std::strin
                "%zu, %zu, %zu\n",
                st.dist_hist[0], st.dist_hist[1], st.dist_hist[2], st.dist_hist[3], st.dist_hist[4], st.long_dist_hist[0],
                st.long_dist_hist[1], st.long_dist_hist[2], st.long_dist_hist[3], st.long_dist_hist[4]);
-        printf("[gdz] dependent matches %zu (%.1f%% of matches) in %zu rounds (%.1f%% of rounds)\n", st.dep_matches,
-               st.matches ? 100.0 * (double)st.dep_matches / (double)st.matches : 0.0, st.dep_rounds,
-               st.rounds ? 100.0 * (double)st.dep_rounds / (double)st.rounds : 0.0);
+        printf("[gdz] dependent matches %zu (%.1f%% of matches) in %zu rounds (%.1f%% of rounds), %zu of them up to 32 "
+               "bytes (%.2f per round), %zu within a 512 byte ring (%.2f per round)\n",
+               st.dep_matches, st.matches ? 100.0 * (double)st.dep_matches / (double)st.matches : 0.0, st.dep_rounds,
+               st.rounds ? 100.0 * (double)st.dep_rounds / (double)st.rounds : 0.0, st.dep_short,
+               st.rounds ? (double)st.dep_short / (double)st.rounds : 0.0, st.ring_hits,
+               st.rounds ? (double)st.ring_hits / (double)st.rounds : 0.0);
+        printf("[gdz] short dependent matches free of other dependent matches: %zu (%.1f%%), rounds with one %.1f%%, "
+               "rounds with a chained one %.1f%%\n",
+               st.dep_free, st.dep_short ? 100.0 * (double)st.dep_free / (double)st.dep_short : 0.0,
+               st.rounds ? 100.0 * (double)st.dep_free_rounds / (double)st.rounds : 0.0,
+               st.rounds ? 100.0 * (double)st.dep_chain_rounds / (double)st.rounds : 0.0);
+        printf("[gdz] dependent copy steps per round: serial %.2f, mrr exact %.2f, mrr hwm %.2f; own-lane able %.2f; all-literal rounds %.1f%%\n",
+               st.rounds ? (double)st.dep_matches / (double)st.rounds : 0.0,
+               st.rounds ? (double)st.mrr_exact / (double)st.rounds : 0.0,
+               st.rounds ? (double)st.mrr_hwm / (double)st.rounds : 0.0,
+               st.rounds ? (double)st.dep_own / (double)st.rounds : 0.0,
+               st.rounds ? 100.0 * (double)st.lit_rounds / (double)st.rounds : 0.0);
+        printf("[gdz] distance up to 512, 1k, 2k, 4k, 8k, 16k, 32k, 64k:");
+        for (int b = 0; b < 8; b++)
+            printf(" %.1f%%", st.matches ? 100.0 * (double)st.far_hist[b] / (double)st.matches : 0.0);
+        printf("\n");
+        printf("[gdz] ring upkeep: %.2f own-lane copy steps and %.1f own-lane bytes per round, %.1f literals per round\n",
+               st.rounds ? (double)st.own_steps / (double)st.rounds : 0.0,
+               st.rounds ? (double)st.own_bytes / (double)st.rounds : 0.0,
+               st.rounds ? (double)st.literals / (double)st.rounds : 0.0);
+        printf("[gdz] ring latch, tiles%%:");
+        for (int k = 0; k < 8; k++)
+            printf(" %.0f |", 100.0 * (double)st.pol_tiles[k] / (double)s.tiles.size());
+        printf("\n");
+        printf("[gdz] ring policies, on%% served%%:");
+        for (int k = 0; k < 8; k++)
+            printf(" %.0f %.0f |", st.rounds ? 100.0 * (double)st.pol_on[k] / (double)st.rounds : 0.0,
+                   st.ring_hits ? 100.0 * (double)st.pol_served[k] / (double)st.ring_hits : 0.0);
+        printf("\n");
         size_t lit_all = 0, lit9 = 0, lit10 = 0, dist_all = 0, dist7 = 0, dist8 = 0;
         for (int b = 1; b < 16; b++) {
             lit_all += st.len_hist[b];
