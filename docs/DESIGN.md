@@ -5,8 +5,10 @@
 
 ## Mapping
 
-- One workgroup = one subgroup of 32 = one tile. The pipeline requires subgroup size 32; if the device cannot,
-  it takes the device's size and the extra lanes exit.
+- One workgroup = one subgroup of 32 = one tile. The pipeline asks for subgroup size 32 through subgroup size
+  control (Vulkan 1.3 or `VK_EXT_subgroup_size_control`); without it, or when 32 is out of range, it takes the
+  device's size and lanes 32 and up exit. Narrower than 32: refused.
+- SPIR-V 1.5 (`glslc --target-env=vulkan1.2`), Vulkan memory model.
 - Lane `i` owns bitstream `i`, in a 64-bit buffer.
 - Push constants, no descriptor sets: stream, tile or region table, output, status (0 = none), count (0 = none),
   region stride (0 = tile table). Each workgroup turns its tile into a source and a destination pointer first; the
@@ -109,7 +111,7 @@ Specialization constants, one binary for all.
 
 ## Commands
 
-    .\build.cmd                                              everything
+    .\build.cmd  or  ./build.sh                              everything
     build\gdz.exe file.gdz -gpu                              CPU and GPU, compared
     build\gdz.exe -list test\vectors\manifest.txt -gpu       the vector suite
     build\gdz.exe -fuzz file.gdz -n 1000 -gpu                broken copies, CPU and GPU must agree

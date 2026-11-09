@@ -4,12 +4,12 @@
 
 Close other programs that use the GPU, then:
 
-    .\build.cmd
-    .\bench.cmd -khr
+    .\build.cmd              ./build.sh
+    .\bench.cmd -khr         ./bench.sh -khr
 
-`bench.cmd` writes `results\<gpu>.csv`. Open a pull request with that file. Results from RDNA 4 cards
-(RX 9000 series) are wanted most: the kernel regressed there and I have no such card to test on. `.\bench.cmd` without `-khr` skips the
-Khronos layer and needs no python. The README table and the chart are redrawn from the CSV by
+`bench` writes `results\<gpu>.csv`. Open a pull request with that file. Results from RDNA 4 cards
+(RX 9000 series) are wanted most: the kernel regressed there and I have no such card to test on. Linux GPUs and
+NVIDIA and Intel cards have never run it. Without `-khr` the script skips the Khronos layer and needs no python. The README table and the chart are redrawn from the CSV by
 `python tools\plot.py`; run it or leave it to me.
 
 ## Something failed

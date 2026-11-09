@@ -44,7 +44,7 @@ if(GLSLC)
     endif()
     add_custom_command(
         OUTPUT ${SPV}
-        COMMAND ${GLSLC} --target-env=vulkan1.3 -O -mfmt=c ${CMAKE_CURRENT_SOURCE_DIR}/src/tile.comp -o ${SPV}
+        COMMAND ${GLSLC} --target-env=vulkan1.2 -O -mfmt=c ${CMAKE_CURRENT_SOURCE_DIR}/src/tile.comp -o ${SPV}
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/tile.comp
         COMMENT "glslc tile.comp"
         VERBATIM)
@@ -94,6 +94,6 @@ foreach(t vkdeflate gdz attach_test bench single_test example_decompress example
     if(MSVC)
         target_compile_options(${t} PRIVATE /W4)
     else()
-        target_compile_options(${t} PRIVATE -Wall -Wextra)
+        target_compile_options(${t} PRIVATE -Wall -Wextra -Wno-missing-field-initializers)
     endif()
 endforeach()

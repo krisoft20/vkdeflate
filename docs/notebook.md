@@ -30,6 +30,7 @@ Each change against the previous kept one, separate builds, `bench` interleaved,
 | 16-byte pattern stores, 128-byte aligned pattern chunks, period doubling | 0 to +4 % | no |
 | per-tile source and destination pointers, for the region API | 0 to +2.3 % on the tile path | yes |
 | region path (`cmd_decompress_memory`, upload included) against the tile path | 0 to +0.8 % | |
+| SPIR-V 1.5 instead of 1.6, for Vulkan 1.2 devices | -0.8 to +1.0 % | yes |
 
 What the ablations showed, share of kernel time:
 
@@ -236,7 +237,9 @@ store wait in the ISA. `VK_EXT_memory_decompression` is not offered by this driv
 46 reference-encoded streams, 811.6 MB (Silesia at level 6, five files at levels 0, 1, 3, 9, 12, nine game assets):
 CPU and GPU byte-exact. 16 pattern streams and the single header: the same. Fuzzing, several thousand broken
 copies: CPU and GPU agree on every verdict and output. Second pass: the same, plus 37 edge vectors and 2400
-broken copies of eight streams.
+broken copies of eight streams. Subgroup 64 (`-wave64`): the same 46 and 37 streams byte-exact. Linux (gcc 13,
+Ubuntu 24.04 under WSL): builds without warnings, CPU decoder byte-exact on the 46 and 37 streams. lavapipe
+offers subgroups of 8 or 16 and cannot run the kernel.
 
 ## Bugs the checks found
 

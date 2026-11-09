@@ -82,7 +82,7 @@ def find_glslc(arg):
 def spirv(glslc):
     with tempfile.TemporaryDirectory() as d:
         out = os.path.join(d, 'tile_spv.inc')
-        subprocess.check_call([glslc, '--target-env=vulkan1.3', '-O', '-mfmt=c',
+        subprocess.check_call([glslc, '--target-env=vulkan1.2', '-O', '-mfmt=c',
                                os.path.join(ROOT, 'src', 'tile.comp'), '-o', out])
         with open(out, encoding='utf-8') as f:
             return f.read().strip()

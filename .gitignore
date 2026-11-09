@@ -5,6 +5,7 @@ test/vectors/
 test/silesia/
 test/silesia.zip
 local.cmd
+local.sh
 vkdeflate_tile_*.txt
 
 results/diag/

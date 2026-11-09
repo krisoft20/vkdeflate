@@ -145,6 +145,7 @@ struct push_t {
 };
 
 constexpr VkDeviceSize REGION_RING = 1 << 20;
+constexpr const char* subgroup_ext = "VK_EXT_subgroup_size_control";
 
 struct ctx_t {
 #if defined(_WIN32)
@@ -163,6 +164,8 @@ struct ctx_t {
     float ts_period = 0;
     std::string name;
     uint32_t subgroup = 0;
+    bool control = false;
+    bool control_ext = false;
     uint32_t experiment = 0;
     uint32_t ring = 512;
     uint32_t pad = 0;
@@ -194,46 +197,64 @@ static bool fail(ctx_t& g, const char* what) {
     return false;
 }
 
-static bool pick_subgroup(ctx_t& g, PFN_vkGetInstanceProcAddr gipa, const config_t& cfg, bool& control) {
-    VkPhysicalDeviceVulkan13Properties p13 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES};
-    VkPhysicalDeviceVulkan11Properties p11 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES, &p13};
+static bool has_extension(ctx_t& g, const char* name) {
+    uint32_t n = 0;
+    g.f.vkEnumerateDeviceExtensionProperties(g.phys, nullptr, &n, nullptr);
+    std::vector<VkExtensionProperties> exts(n);
+    g.f.vkEnumerateDeviceExtensionProperties(g.phys, nullptr, &n, exts.data());
+    for (const VkExtensionProperties& e : exts)
+        if (!strcmp(e.extensionName, name))
+            return true;
+    return false;
+}
+
+static bool pick_subgroup(ctx_t& g, const config_t& cfg) {
+    VkPhysicalDeviceProperties base;
+    g.f.vkGetPhysicalDeviceProperties(g.phys, &base);
+    if (base.apiVersion < VK_API_VERSION_1_2)
+        return fail(g, "device is below vulkan 1.2");
+    bool core13 = base.apiVersion >= VK_API_VERSION_1_3;
+    bool has_control = core13 || has_extension(g, subgroup_ext);
+
+    VkPhysicalDeviceSubgroupSizeControlProperties psc = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES};
+    VkPhysicalDeviceVulkan11Properties p11 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES,
+                                              has_control ? &psc : nullptr};
     VkPhysicalDeviceProperties2 p2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &p11};
     g.f.vkGetPhysicalDeviceProperties2(g.phys, &p2);
     g.name = p2.properties.deviceName;
     g.ts_period = p2.properties.limits.timestampPeriod;
-    if (p2.properties.apiVersion < VK_API_VERSION_1_3)
-        return fail(g, "device is below vulkan 1.3");
     constexpr VkSubgroupFeatureFlags need_ops = VK_SUBGROUP_FEATURE_BASIC_BIT | VK_SUBGROUP_FEATURE_BALLOT_BIT |
                                                 VK_SUBGROUP_FEATURE_ARITHMETIC_BIT | VK_SUBGROUP_FEATURE_SHUFFLE_BIT;
     if ((p11.subgroupSupportedOperations & need_ops) != need_ops || !(p11.subgroupSupportedStages & VK_SHADER_STAGE_COMPUTE_BIT))
         return fail(g, "device lacks subgroup ballot, arithmetic or shuffle in compute");
 
-    VkPhysicalDeviceVulkan13Features f13 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
-    VkPhysicalDeviceVulkan12Features f12 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, &f13};
+    VkPhysicalDeviceSubgroupSizeControlFeatures fsc = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES};
+    VkPhysicalDeviceVulkan12Features f12 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+                                            has_control ? &fsc : nullptr};
     VkPhysicalDeviceFeatures2 f2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &f12};
     g.f.vkGetPhysicalDeviceFeatures2(g.phys, &f2);
     if (!f2.features.shaderInt64 || !f12.storageBuffer8BitAccess || !f12.shaderInt8 || !f12.bufferDeviceAddress ||
         !f12.vulkanMemoryModel)
         return fail(g, "device lacks shaderInt64, shaderInt8, storageBuffer8BitAccess, bufferDeviceAddress or vulkanMemoryModel");
-    control = f13.subgroupSizeControl && f13.computeFullSubgroups &&
-              (p13.requiredSubgroupSizeStages & VK_SHADER_STAGE_COMPUTE_BIT);
+    g.control = has_control && fsc.subgroupSizeControl && fsc.computeFullSubgroups &&
+                (psc.requiredSubgroupSizeStages & VK_SHADER_STAGE_COMPUTE_BIT);
+    g.control_ext = g.control && !core13;
 
     g.subgroup = cfg.subgroup_size;
     if (!g.subgroup) {
         if (p11.subgroupSize == lanes)
             g.subgroup = lanes;
-        else if (control && p13.minSubgroupSize <= lanes && lanes <= p13.maxSubgroupSize)
+        else if (g.control && psc.minSubgroupSize <= lanes && lanes <= psc.maxSubgroupSize)
             g.subgroup = lanes;
         else
             g.subgroup = p11.subgroupSize;
     }
     if (g.subgroup < lanes)
         return fail(g, "subgroup size below 32 is not supported");
-    if (g.subgroup != p11.subgroupSize && !control)
+    if (g.subgroup != p11.subgroupSize && !g.control)
         return fail(g, "device cannot select the requested subgroup size");
-    if (g.subgroup != p11.subgroupSize && (g.subgroup < p13.minSubgroupSize || g.subgroup > p13.maxSubgroupSize))
+    if (g.subgroup != p11.subgroupSize && (g.subgroup < psc.minSubgroupSize || g.subgroup > psc.maxSubgroupSize))
         return fail(g, "requested subgroup size is outside the device range");
-    (void)gipa;
     return true;
 }
 
@@ -280,8 +301,7 @@ static bool init_device(ctx_t& g, const config_t& cfg) {
         }
     }
     g.f.vkGetPhysicalDeviceMemoryProperties(g.phys, &g.mem);
-    bool control = false;
-    if (!pick_subgroup(g, gipa, cfg, control))
+    if (!pick_subgroup(g, cfg))
         return false;
 
     uint32_t nfam = 0;
@@ -309,11 +329,12 @@ static bool init_device(ctx_t& g, const config_t& cfg) {
     VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR want_stats = {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR};
     want_stats.pipelineExecutableInfo = VK_TRUE;
-    VkPhysicalDeviceVulkan13Features want13 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-                                               g.stats ? &want_stats : nullptr};
-    want13.subgroupSizeControl = control;
-    want13.computeFullSubgroups = control;
-    VkPhysicalDeviceVulkan12Features want12 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, &want13};
+    VkPhysicalDeviceSubgroupSizeControlFeatures want_sc = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES,
+                                                           g.stats ? &want_stats : nullptr};
+    want_sc.subgroupSizeControl = VK_TRUE;
+    want_sc.computeFullSubgroups = VK_TRUE;
+    VkPhysicalDeviceVulkan12Features want12 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+                                               g.control ? (void*)&want_sc : g.stats ? (void*)&want_stats : nullptr};
     want12.storageBuffer8BitAccess = VK_TRUE;
     want12.shaderInt8 = VK_TRUE;
     want12.bufferDeviceAddress = VK_TRUE;
@@ -329,8 +350,14 @@ static bool init_device(ctx_t& g, const config_t& cfg) {
     dci.queueCreateInfoCount = 1;
     dci.pQueueCreateInfos = &qci;
     dci.pEnabledFeatures = &want;
-    dci.enabledExtensionCount = g.stats ? 1 : 0;
-    dci.ppEnabledExtensionNames = &stats_ext;
+    const char* ext_names[2];
+    uint32_t next_names = 0;
+    if (g.stats)
+        ext_names[next_names++] = stats_ext;
+    if (g.control_ext)
+        ext_names[next_names++] = subgroup_ext;
+    dci.enabledExtensionCount = next_names;
+    dci.ppEnabledExtensionNames = ext_names;
     r = g.f.vkCreateDevice(g.phys, &dci, nullptr, &g.dev);
     if (r != VK_SUCCESS)
         return fail(g, "vkCreateDevice", r);
@@ -434,9 +461,11 @@ static bool make_pipeline(ctx_t& g) {
     cpci.flags = g.stats ? VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR |
                                VK_PIPELINE_CREATE_CAPTURE_INTERNAL_REPRESENTATIONS_BIT_KHR
                          : 0;
-    cpci.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, &rss,
-                  VK_PIPELINE_SHADER_STAGE_CREATE_REQUIRE_FULL_SUBGROUPS_BIT, VK_SHADER_STAGE_COMPUTE_BIT, g.shader,
-                  "main", &spec};
+    VkPipelineShaderStageCreateFlags full = 0;
+    if (g.control)
+        full = VK_PIPELINE_SHADER_STAGE_CREATE_REQUIRE_FULL_SUBGROUPS_BIT;
+    cpci.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, g.control ? &rss : nullptr, full,
+                  VK_SHADER_STAGE_COMPUTE_BIT, g.shader, "main", &spec};
     cpci.layout = g.layout;
     if ((r = g.f.vkCreateComputePipelines(g.dev, VK_NULL_HANDLE, 1, &cpci, nullptr, &g.pipeline)) != VK_SUCCESS)
         return fail(g, "vkCreateComputePipelines", r);
@@ -586,8 +615,7 @@ ctx_t* attach(VkInstance instance, VkPhysicalDevice phys, VkDevice dev, PFN_vkGe
 #define LOAD_DEVICE_EXT(fn) g->f.fn = (PFN_##fn)g->f.vkGetDeviceProcAddr(dev, #fn);
     VK_FN_PIPELINE(LOAD_DEVICE_EXT)
     g->f.vkGetPhysicalDeviceMemoryProperties(phys, &g->mem);
-    bool control = false;
-    if (!pick_subgroup(*g, gipa, cfg, control) || !make_pipeline(*g)) {
+    if (!pick_subgroup(*g, cfg) || !make_pipeline(*g)) {
         err = g->err;
         destroy(g);
         return nullptr;

@@ -8,7 +8,7 @@ GPU decompression of GDeflate for Vulkan on any vendor's card: one header, MIT, 
 
 GDeflate is the format behind DirectStorage and RTX IO. Vulkan has an extension for it,
 `VK_EXT_memory_decompression`, but so far only NVIDIA's driver is known to implement it. vkdeflate is a compute shader and a small
-host library that decode the same streams on AMD, Intel and anything else with Vulkan 1.3.
+host library that decode the same streams on AMD, Intel and anything else with Vulkan 1.2.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/khronos_AMD_Radeon_RX_6650_XT-dark.svg">
@@ -66,19 +66,21 @@ vkdeflate::record_regions_indirect(ctx, cmd, regions_addr, count_addr, max_count
 the GPU, and the table from the extension's names to these.
 
 `record()` is one dispatch in your command buffer. You own the barriers around it and read the status words
-(0 is good, `vkdeflate::tile_error()` names the rest). The device needs Vulkan 1.3 with `shaderInt64`, `shaderInt8`,
-`storageBuffer8BitAccess`, `bufferDeviceAddress`, `vulkanMemoryModel`, `subgroupSizeControl` and
-`computeFullSubgroups`. `gdeflate::decompress()` in the same header is the CPU fallback. There is no encoder yet:
+(0 is good, `vkdeflate::tile_error()` names the rest). The device needs Vulkan 1.2 with `shaderInt64`, `shaderInt8`,
+`storageBuffer8BitAccess`, `bufferDeviceAddress` and `vulkanMemoryModel`, and a subgroup of 32 lanes: native, or
+chosen through `subgroupSizeControl` and `computeFullSubgroups` (core in 1.3, `VK_EXT_subgroup_size_control` before;
+enable them on the device you attach). `gdeflate::decompress()` in the same header is the CPU fallback. There is no encoder yet:
 compress with the reference encoder, which `bench.cmd` builds as `third_party_build\gdref\build\gdref.exe`.
 
 ## Benchmark it on your card
 
-Windows with Visual Studio's C++ and CMake tools, and git. The Vulkan SDK is not needed: the compiled shader is in
-the repository and the build fetches Khronos's Vulkan headers if it finds none.
+Windows with Visual Studio's C++ and CMake tools, and git; or Linux with CMake, a C++17 compiler, git, curl and
+unzip. The Vulkan SDK is not needed: the compiled shader is in the repository and the build fetches Khronos's Vulkan
+headers if it finds none.
 
-    .\build.cmd
-    .\bench.cmd            the Silesia corpus on your GPU, written to results\<gpu>.csv
-    .\bench.cmd -khr       the same streams through the Khronos layer too (needs python)
+    .\build.cmd           ./build.sh
+    .\bench.cmd           ./bench.sh          the Silesia corpus on your GPU, written to results\<gpu>.csv
+    .\bench.cmd -khr      ./bench.sh -khr     the same streams through the Khronos layer too (needs python)
 
 `bench.cmd` downloads the corpus (66 MB), builds the reference encoder, compresses the twelve files and checks every
 decoded byte against the CPU decoder. Results so far, geometric mean of the kernel rate over the twelve streams:
@@ -104,7 +106,9 @@ A card that is not in this table is the most useful thing you can add: open a pu
 - RDNA 4 regressed: on an RX 9070 XT the kernel needs 191 vector registers (96 on RDNA2), and some large
   dispatches are 3-4 % slower than with the previous version. Without an RDNA 4 card here this cannot be narrowed
   down or fixed. Volunteers wanted: `bench.cmd -khr` and the CSV, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
-- No encoder. Windows scripts only; the CMake build has not been tried on Linux.
+- Subgroups narrower than 32 lanes (Mali, PowerVR, software renderers such as llvmpipe) are not supported.
+- On Linux the build and the CPU tests pass (gcc 13, Ubuntu 24.04 under WSL); no Linux GPU has run the kernel yet.
+- No encoder.
 - GDeflate compresses like zlib. zstd and Oodle pack tighter; the larger files are the price of a format a GPU can decode.
 
 ## More

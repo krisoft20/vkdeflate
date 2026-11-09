@@ -203,6 +203,12 @@ static void make_device(bool want_layer) {
         ici.ppEnabledLayerNames = &layer_name;
     }
     VkResult r = vkCreateInstance(&ici, nullptr, &instance);
+    if (r != VK_SUCCESS && has_layer) {
+        printf("[bench] the khronos layer is listed but does not load (%d), going on without it\n", (int)r);
+        has_layer = false;
+        ici.enabledLayerCount = 0;
+        r = vkCreateInstance(&ici, nullptr, &instance);
+    }
     if (r != VK_SUCCESS)
         die("vkCreateInstance", r);
 #define VK_LOAD(fn) fn = (PFN_##fn)vkGetInstanceProcAddr(instance, #fn);
