@@ -137,6 +137,7 @@ struct result_t {
     bool ok = false;
     double cpu_ms = 0;
     double gpu_ms = 0;
+    size_t size = 0;
     vkdeflate::timing_t gpu;
 };
 
@@ -158,6 +159,7 @@ static bool check_one(const args_t& a, const std::string& path, const std::strin
         csize += t.csize;
     printf("[gdz] %s: %zu bytes, %zu tiles, %zu bytes of output (ratio %.3f)\n", path.c_str(), in.size(),
            s.tiles.size(), s.total, s.total ? (double)in.size() / (double)s.total : 0.0);
+    r.size = s.total;
 
     std::vector<uint8_t> ref;
     if (!ref_path.empty()) {
@@ -497,14 +499,10 @@ int main(int argc, char** argv) {
                 all_ok = false;
                 continue;
             }
-            std::vector<uint8_t> tmp;
-            std::ifstream g(gdz, std::ios::binary | std::ios::ate);
             cpu_ms += r.cpu_ms;
             gpu_ms += r.gpu_ms;
             kernel_ms += r.gpu.kernel_ms;
-            std::ifstream o(orig, std::ios::binary | std::ios::ate);
-            if (o)
-                bytes += (size_t)o.tellg();
+            bytes += r.size;
         }
         printf("[gdz] %d files, %d failed, %.1f MB", files, failed, bytes / 1e6);
         if (a.cpu)

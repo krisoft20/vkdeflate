@@ -113,7 +113,7 @@ Specialization constants, one binary for all.
 
     .\build.cmd  or  ./build.sh                              everything
     build\gdz.exe file.gdz -gpu                              CPU and GPU, compared
-    build\gdz.exe -list test\vectors\manifest.txt -gpu       the vector suite
+    build\gdz.exe -list test\vectors\silesia.txt -gpu        the Silesia streams
     build\gdz.exe -fuzz file.gdz -n 1000 -gpu                broken copies, CPU and GPU must agree
     build\gdz.exe file.gdz -info                             blocks, matches, dependent copies, distances
     build\gdz.exe file.gdz -trace N                          matches covering output byte N
@@ -122,9 +122,9 @@ Specialization constants, one binary for all.
     build\bench.exe -list test\vectors\silesia.txt -csvdir results   times, plus a device and compiler report
     python tools\plot.py                                     redraw docs\img, refresh the README table
 
-After a change to `tile.comp`: suite, fuzz, `attach_test`, `single_header`. Time changes with `bench`, several
+After a change to `tile.comp`: Silesia streams, fuzz, `attach_test`, `single_header`. Time changes with `bench`, several
 interleaved rounds: `gdz -rounds` catches the GPU in different clock states. A switch kept as a specialization
 constant can move the other variant's timing by 10 %; compare variants as separate builds.
 
 `local.cmd` in the root (ignored by git) may set `VKDEFLATE_CMAKE_ARGS` (`-DGLSLC=... -DVULKAN_INCLUDE=...`) and
-`VKDEFLATE_BUSY` (a program during which builds refuse to start); `local.sh` does the same on Linux..
+`VKDEFLATE_BUSY` (a program during which builds refuse to start); `local.sh` does the same on Linux.
