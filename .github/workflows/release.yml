@@ -85,7 +85,9 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}
-          path: vkdeflate-bench-*.*
+          path: |
+            vkdeflate-bench-*.zip
+            vkdeflate-bench-*.tar.gz
 
   release:
     needs: package
@@ -103,9 +105,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -x
-          ls -l dist
           gh api "repos/$GITHUB_REPOSITORY/git/refs/tags/$GITHUB_REF_NAME" --jq .object > ref.json
-          cat ref.json
           if [ "$(jq -r .type ref.json)" = "tag" ]; then
               gh api "repos/$GITHUB_REPOSITORY/git/tags/$(jq -r .sha ref.json)" --jq .message > notes.txt
           else
@@ -113,4 +113,4 @@ jobs:
           fi
           cat notes.txt
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.txt
-          gh release upload "$GITHUB_REF_NAME" dist/* single_include/vkdeflate.h --clobber
+          gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz single_include/vkdeflate.h --clobber
