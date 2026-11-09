@@ -174,6 +174,7 @@ struct ctx_t {
     uint32_t dist_root = 7;
     bool verbose = false;
     bool stats = false;
+    std::string report;
     VkCommandPool pool = VK_NULL_HANDLE;
     VkCommandBuffer cmd = VK_NULL_HANDLE;
     VkFence fence = VK_NULL_HANDLE;
@@ -323,7 +324,7 @@ static bool init_device(ctx_t& g, const config_t& cfg) {
     g.f.vkEnumerateDeviceExtensionProperties(g.phys, nullptr, &next, exts.data());
     const char* stats_ext = "VK_KHR_pipeline_executable_properties";
     for (const VkExtensionProperties& e : exts)
-        if (g.verbose && !strcmp(e.extensionName, stats_ext))
+        if ((g.verbose || cfg.capture_stats) && !strcmp(e.extensionName, stats_ext))
             g.stats = true;
 
     VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR want_stats = {
@@ -389,6 +390,37 @@ static bool init_device(ctx_t& g, const config_t& cfg) {
     return true;
 }
 
+static std::string stat_text(const VkPipelineExecutableStatisticKHR& s) {
+    char v[64];
+    if (s.format == VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_UINT64_KHR)
+        snprintf(v, sizeof(v), "%llu", (unsigned long long)s.value.u64);
+    else if (s.format == VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_INT64_KHR)
+        snprintf(v, sizeof(v), "%lld", (long long)s.value.i64);
+    else if (s.format == VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_FLOAT64_KHR)
+        snprintf(v, sizeof(v), "%g", s.value.f64);
+    else
+        snprintf(v, sizeof(v), "%s", s.value.b32 ? "yes" : "no");
+    return std::string(s.name) + ": " + v;
+}
+
+static void make_report(ctx_t& g) {
+    g.report = "subgroup: " + std::to_string(g.subgroup);
+    g.report += g.control ? ", chosen through subgroup size control\n" : ", native\n";
+    g.report += "pipelines: " + std::string(g.pipeline_runs ? "2, runs padded by " + std::to_string(g.runs_pad) + " bytes" : "1") + "\n";
+    if (!g.stats) {
+        g.report += "compiler statistics: not available\n";
+        return;
+    }
+    VkPipelineExecutableInfoKHR ei = {VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INFO_KHR};
+    ei.pipeline = g.pipeline;
+    uint32_t ns = 0;
+    g.f.vkGetPipelineExecutableStatisticsKHR(g.dev, &ei, &ns, nullptr);
+    std::vector<VkPipelineExecutableStatisticKHR> st(ns, {VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_STATISTIC_KHR});
+    g.f.vkGetPipelineExecutableStatisticsKHR(g.dev, &ei, &ns, st.data());
+    for (const VkPipelineExecutableStatisticKHR& s : st)
+        g.report += "compiler " + stat_text(s) + "\n";
+}
+
 static void print_stats(ctx_t& g) {
     VkPipelineInfoKHR pi = {VK_STRUCTURE_TYPE_PIPELINE_INFO_KHR};
     pi.pipeline = g.pipeline;
@@ -402,16 +434,8 @@ static void print_stats(ctx_t& g) {
         g.f.vkGetPipelineExecutableStatisticsKHR(g.dev, &ei, &ns, nullptr);
         std::vector<VkPipelineExecutableStatisticKHR> st(ns, {VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_STATISTIC_KHR});
         g.f.vkGetPipelineExecutableStatisticsKHR(g.dev, &ei, &ns, st.data());
-        for (const VkPipelineExecutableStatisticKHR& s : st) {
-            if (s.format == VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_UINT64_KHR)
-                printf("[vkdeflate] %s: %llu\n", s.name, (unsigned long long)s.value.u64);
-            else if (s.format == VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_INT64_KHR)
-                printf("[vkdeflate] %s: %lld\n", s.name, (long long)s.value.i64);
-            else if (s.format == VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_FLOAT64_KHR)
-                printf("[vkdeflate] %s: %g\n", s.name, s.value.f64);
-            else
-                printf("[vkdeflate] %s: %s\n", s.name, s.value.b32 ? "yes" : "no");
-        }
+        for (const VkPipelineExecutableStatisticKHR& s : st)
+            printf("[vkdeflate] %s\n", stat_text(s).c_str());
         uint32_t ni = 0;
         g.f.vkGetPipelineExecutableInternalRepresentationsKHR(g.dev, &ei, &ni, nullptr);
         std::vector<VkPipelineExecutableInternalRepresentationKHR> irs(
@@ -458,9 +482,11 @@ static bool make_pipeline(ctx_t& g) {
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO};
     rss.requiredSubgroupSize = g.subgroup;
     VkComputePipelineCreateInfo cpci = {VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
-    cpci.flags = g.stats ? VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR |
-                               VK_PIPELINE_CREATE_CAPTURE_INTERNAL_REPRESENTATIONS_BIT_KHR
-                         : 0;
+    cpci.flags = 0;
+    if (g.stats)
+        cpci.flags |= VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR;
+    if (g.stats && g.verbose)
+        cpci.flags |= VK_PIPELINE_CREATE_CAPTURE_INTERNAL_REPRESENTATIONS_BIT_KHR;
     VkPipelineShaderStageCreateFlags full = 0;
     if (g.control)
         full = VK_PIPELINE_SHADER_STAGE_CREATE_REQUIRE_FULL_SUBGROUPS_BIT;
@@ -475,7 +501,8 @@ static bool make_pipeline(ctx_t& g) {
         if ((r = g.f.vkCreateComputePipelines(g.dev, VK_NULL_HANDLE, 1, &cpci, nullptr, &g.pipeline_runs)) != VK_SUCCESS)
             return fail(g, "vkCreateComputePipelines", r);
     }
-    if (g.stats)
+    make_report(g);
+    if (g.stats && g.verbose)
         print_stats(g);
     if (g.verbose)
         printf("[vkdeflate] %s, subgroup size %u%s\n", g.name.c_str(), g.subgroup,
@@ -615,6 +642,11 @@ ctx_t* attach(VkInstance instance, VkPhysicalDevice phys, VkDevice dev, PFN_vkGe
 #define LOAD_DEVICE_EXT(fn) g->f.fn = (PFN_##fn)g->f.vkGetDeviceProcAddr(dev, #fn);
     VK_FN_PIPELINE(LOAD_DEVICE_EXT)
     g->f.vkGetPhysicalDeviceMemoryProperties(phys, &g->mem);
+    if (cfg.capture_stats) {
+        VK_FN_STATS(LOAD_DEVICE_EXT)
+        g->stats = g->f.vkGetPipelineExecutablePropertiesKHR && g->f.vkGetPipelineExecutableStatisticsKHR &&
+                   g->f.vkGetPipelineExecutableInternalRepresentationsKHR;
+    }
     if (!pick_subgroup(*g, cfg) || !make_pipeline(*g)) {
         err = g->err;
         destroy(g);
@@ -667,6 +699,10 @@ void destroy(ctx_t* g) {
 
 const char* device_name(const ctx_t* g) {
     return g ? g->name.c_str() : "none";
+}
+
+const char* report(const ctx_t* g) {
+    return g ? g->report.c_str() : "";
 }
 
 bool describe(const uint8_t* p, size_t n, size_t stream_size, std::vector<tile_desc_t>& tiles, size_t& out_size,

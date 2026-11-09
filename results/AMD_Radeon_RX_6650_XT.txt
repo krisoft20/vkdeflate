@@ -1,0 +1,11 @@
+gpu: AMD Radeon RX 6650 XT
+driver: AMD proprietary driver 26.10.1 (AMD proprietary shader compiler)
+vulkan: 1.4.315
+compute units: 32, vector registers per lane up to 256
+subgroup: 32, chosen through subgroup size control
+pipelines: 2, runs padded by 4608 bytes
+compiler numUsedVgprs: 93
+compiler numUsedSgprs: 70
+compiler ldsSizePerLocalWorkGroup: 65536
+compiler ldsUsageSizeInBytes: 3072
+compiler scratchMemUsageInBytes: 0

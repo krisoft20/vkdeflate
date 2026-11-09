@@ -67,6 +67,7 @@ namespace {
     X(vkGetPhysicalDeviceProperties)              \
     X(vkGetPhysicalDeviceProperties2)             \
     X(vkGetPhysicalDeviceFeatures)                \
+    X(vkGetPhysicalDeviceFeatures2)               \
     X(vkGetPhysicalDeviceQueueFamilyProperties)   \
     X(vkGetPhysicalDeviceMemoryProperties)        \
     X(vkEnumerateDeviceExtensionProperties)       \
@@ -106,6 +107,8 @@ PFN_vkCmdDecompressMemoryIndirectCountNV vkCmdDecompressMemoryIndirectCountNV = 
 
 constexpr const char* layer_name = "VK_LAYER_KHRONOS_memory_decompression";
 constexpr const char* ext_name = "VK_NV_memory_decompression";
+constexpr const char* stats_name = "VK_KHR_pipeline_executable_properties";
+constexpr const char* subgroup_name = "VK_EXT_subgroup_size_control";
 
 VkInstance instance = VK_NULL_HANDLE;
 VkPhysicalDevice phys = VK_NULL_HANDLE;
@@ -119,6 +122,8 @@ double tick_ms = 1e-6;
 bool has_layer = false;
 std::string gpu_name;
 std::string driver_text;
+std::string device_text;
+bool has_stats = false;
 VkPhysicalDeviceMemoryProperties memprops = {};
 
 struct buf_t {
@@ -238,15 +243,37 @@ static void make_device(bool want_layer) {
     gpu_name = props.deviceName;
     driver_text = std::string(drv.driverName) + " " + drv.driverInfo;
 
-    if (has_layer) {
-        uint32_t next = 0;
-        vkEnumerateDeviceExtensionProperties(phys, nullptr, &next, nullptr);
-        std::vector<VkExtensionProperties> exts(next);
-        vkEnumerateDeviceExtensionProperties(phys, nullptr, &next, exts.data());
-        bool found = false;
+    uint32_t next = 0;
+    vkEnumerateDeviceExtensionProperties(phys, nullptr, &next, nullptr);
+    std::vector<VkExtensionProperties> exts(next);
+    vkEnumerateDeviceExtensionProperties(phys, nullptr, &next, exts.data());
+    auto has_ext = [&](const char* name) {
         for (const VkExtensionProperties& e : exts)
-            found = found || strcmp(e.extensionName, ext_name) == 0;
-        has_layer = found;
+            if (!strcmp(e.extensionName, name))
+                return true;
+        return false;
+    };
+    has_layer = has_layer && has_ext(ext_name);
+    has_stats = has_ext(stats_name);
+    bool core13 = props.apiVersion >= VK_API_VERSION_1_3;
+    bool size_ext = !core13 && has_ext(subgroup_name);
+
+    char api[32];
+    snprintf(api, sizeof(api), "%u.%u.%u", VK_API_VERSION_MAJOR(props.apiVersion), VK_API_VERSION_MINOR(props.apiVersion),
+             VK_API_VERSION_PATCH(props.apiVersion));
+    device_text = "gpu: " + gpu_name + "\ndriver: " + driver_text + "\nvulkan: " + api + "\n";
+    if (has_ext("VK_AMD_shader_core_properties")) {
+        VkPhysicalDeviceShaderCorePropertiesAMD core = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CORE_PROPERTIES_AMD};
+        VkPhysicalDeviceProperties2 p2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &core};
+        vkGetPhysicalDeviceProperties2(phys, &p2);
+        uint32_t cus = core.shaderEngineCount * core.shaderArraysPerEngineCount * core.computeUnitsPerShaderArray;
+        device_text += "compute units: " + std::to_string(cus) + ", vector registers per lane up to " +
+                       std::to_string(core.maxVgprAllocation) + "\n";
+    } else if (has_ext("VK_NV_shader_sm_builtins")) {
+        VkPhysicalDeviceShaderSMBuiltinsPropertiesNV sm = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SM_BUILTINS_PROPERTIES_NV};
+        VkPhysicalDeviceProperties2 p2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &sm};
+        vkGetPhysicalDeviceProperties2(phys, &p2);
+        device_text += "streaming multiprocessors: " + std::to_string(sm.shaderSMCount) + "\n";
     }
     printf("[bench] %s, %s, khronos layer %s\n", gpu_name.c_str(), driver_text.c_str(),
            has_layer ? "loaded" : want_layer ? "not found (set VK_LAYER_PATH to compare)" : "off");
@@ -266,10 +293,18 @@ static void make_device(bool want_layer) {
 
     VkPhysicalDeviceFeatures have = {};
     vkGetPhysicalDeviceFeatures(phys, &have);
-    VkPhysicalDeviceVulkan13Features f13 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
-    f13.subgroupSizeControl = VK_TRUE;
-    f13.computeFullSubgroups = VK_TRUE;
-    VkPhysicalDeviceVulkan12Features f12 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, &f13};
+    VkPhysicalDevicePipelineExecutablePropertiesFeaturesKHR fstats = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR};
+    fstats.pipelineExecutableInfo = VK_TRUE;
+    VkPhysicalDeviceSubgroupSizeControlFeatures fsc = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES,
+                                                       has_stats ? &fstats : nullptr};
+    VkPhysicalDeviceFeatures2 query = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+                                       core13 || size_ext ? (void*)&fsc : nullptr};
+    vkGetPhysicalDeviceFeatures2(phys, &query);
+    bool control = (core13 || size_ext) && fsc.subgroupSizeControl && fsc.computeFullSubgroups;
+    fsc.pNext = has_stats ? &fstats : nullptr;
+    VkPhysicalDeviceVulkan12Features f12 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+                                            control ? (void*)&fsc : has_stats ? (void*)&fstats : nullptr};
     f12.storageBuffer8BitAccess = VK_TRUE;
     f12.shaderInt8 = VK_TRUE;
     f12.bufferDeviceAddress = VK_TRUE;
@@ -286,10 +321,16 @@ static void make_device(bool want_layer) {
     dci.queueCreateInfoCount = 1;
     dci.pQueueCreateInfos = &qci;
     dci.pEnabledFeatures = &f10;
-    if (has_layer) {
-        dci.enabledExtensionCount = 1;
-        dci.ppEnabledExtensionNames = &ext_name;
-    }
+    const char* names[3];
+    uint32_t nnames = 0;
+    if (has_layer)
+        names[nnames++] = ext_name;
+    if (has_stats)
+        names[nnames++] = stats_name;
+    if (control && size_ext)
+        names[nnames++] = subgroup_name;
+    dci.enabledExtensionCount = nnames;
+    dci.ppEnabledExtensionNames = names;
     if ((r = vkCreateDevice(phys, &dci, nullptr, &dev)) != VK_SUCCESS)
         die("vkCreateDevice", r);
     vkGetDeviceQueue(dev, family, 0, &queue);
@@ -684,6 +725,7 @@ int main(int argc, char** argv) {
 
     make_device(a.layer);
     vkdeflate::config_t cfg = a.cfg;
+    cfg.capture_stats = has_stats;
     std::string err;
     vkdeflate::ctx_t* ctx = vkdeflate::attach(instance, phys, dev, vkGetInstanceProcAddr, cfg, err);
     if (!ctx) {
@@ -709,6 +751,12 @@ int main(int argc, char** argv) {
             printf("[bench] %zu rows written to %s\n", rows.size(), csv.c_str());
         else
             printf("[bench] cant write %s\n", csv.c_str());
+        std::string txt = std::filesystem::path(csv).replace_extension(".txt").string();
+        if (FILE* f = fopen(txt.c_str(), "w")) {
+            fprintf(f, "%s%s", device_text.c_str(), vkdeflate::report(ctx));
+            fclose(f);
+            printf("[bench] device and compiler report written to %s\n", txt.c_str());
+        }
     }
 
     vkdeflate::destroy(ctx);

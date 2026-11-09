@@ -33,6 +33,8 @@ DARK = """
 .box{fill:#1a1a19;stroke:#383835;stroke-width:1}.hi{fill:#0d366b;stroke:#3987e5;stroke-width:1}
 """
 
+README_GPU = 'AMD_Radeon_RX_6650_XT'
+
 
 def esc(s):
     return str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
@@ -315,12 +317,13 @@ def readme_table():
 
 def main():
     os.makedirs(os.path.join(ROOT, 'docs', 'img'), exist_ok=True)
-    for path in sorted(glob.glob(os.path.join(ROOT, 'results', '*.csv'))):
+    path = os.path.join(ROOT, 'results', README_GPU + '.csv')
+    if os.path.exists(path):
         with open(path, encoding='utf-8', newline='') as f:
             data = [{'stream': r['stream'].replace('.l6', ''), 'vk': float(r['vkdeflate_ms']), 'khr': float(r['khronos_ms'])}
                     for r in csv.DictReader(f) if r.get('khronos_ms')]
         if data:
-            gpu = os.path.splitext(os.path.basename(path))[0]
+            gpu = README_GPU
             chart_pairs(data, 'khronos_%s.svg' % gpu, 'vkdeflate against the Khronos layer, Silesia corpus',
                         'kernel ms per stream on %s, lower is better; the number is layer time over vkdeflate time' % gpu.replace('_', ' '),
                         'Paired horizontal bars per Silesia stream: kernel time of vkdeflate and of the Khronos layer.')

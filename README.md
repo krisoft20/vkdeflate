@@ -79,7 +79,7 @@ unzip. The Vulkan SDK is not needed: the compiled shader is in the repository an
 headers if it finds none.
 
     .\build.cmd           ./build.sh
-    .\bench.cmd           ./bench.sh          the Silesia corpus on your GPU, written to results\<gpu>.csv
+    .\bench.cmd           ./bench.sh          the Silesia corpus on your GPU, written to results\<gpu>.csv and .txt
     .\bench.cmd -khr      ./bench.sh -khr     the same streams through the Khronos layer too (needs python)
 
 `bench.cmd` downloads the corpus (66 MB), builds the reference encoder, compresses the twelve files and checks every

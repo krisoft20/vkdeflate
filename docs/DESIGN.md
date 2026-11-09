@@ -119,13 +119,12 @@ Specialization constants, one binary for all.
     build\gdz.exe file.gdz -trace N                          matches covering output byte N
     build\gdz.exe file.gdz -gpu -v                           registers, shared memory, ISA
     cmake --build build --target single_header               regenerate single_include\vkdeflate.h, prebuilt\tile_spv.inc
+    build\bench.exe -list test\vectors\silesia.txt -csvdir results   times, plus a device and compiler report
     python tools\plot.py                                     redraw docs\img, refresh the README table
-    tools\diag.cmd                                           every switch on five streams, compiler statistics
 
 After a change to `tile.comp`: suite, fuzz, `attach_test`, `single_header`. Time changes with `bench`, several
 interleaved rounds: `gdz -rounds` catches the GPU in different clock states. A switch kept as a specialization
 constant can move the other variant's timing by 10 %; compare variants as separate builds.
 
 `local.cmd` in the root (ignored by git) may set `VKDEFLATE_CMAKE_ARGS` (`-DGLSLC=... -DVULKAN_INCLUDE=...`) and
-`VKDEFLATE_BUSY` (a program during which builds refuse to start). `test\make_vectors.cmd` builds the full suite;
-edit its paths.
+`VKDEFLATE_BUSY` (a program during which builds refuse to start); `local.sh` does the same on Linux..

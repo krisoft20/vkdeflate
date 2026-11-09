@@ -66,6 +66,7 @@ namespace vkdeflate {
         uint32_t lit_root = 9;
         uint32_t dist_root = 7;
         uint32_t runs_pad_bytes = 4608;
+        bool capture_stats = false;
         bool verbose = false;
     };
 
@@ -112,6 +113,7 @@ namespace vkdeflate {
                   const config_t& cfg, std::string& err);
     void destroy(ctx_t* ctx);
     const char* device_name(const ctx_t* ctx);
+    const char* report(const ctx_t* ctx);
     const char* tile_error(uint32_t code);
 
     bool describe(const uint8_t* p, size_t n, size_t stream_size, std::vector<tile_desc_t>& tiles, size_t& out_size,

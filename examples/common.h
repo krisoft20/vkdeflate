@@ -24,6 +24,8 @@
     X(vkDestroyInstance)                        \
     X(vkEnumeratePhysicalDevices)               \
     X(vkGetPhysicalDeviceProperties)            \
+    X(vkGetPhysicalDeviceFeatures2)             \
+    X(vkEnumerateDeviceExtensionProperties)     \
     X(vkGetPhysicalDeviceQueueFamilyProperties) \
     X(vkGetPhysicalDeviceMemoryProperties)      \
     X(vkCreateDevice)                           \
@@ -140,10 +142,20 @@ inline gpu_t make_gpu() {
     if (g.family == UINT32_MAX)
         die("no compute queue");
 
-    VkPhysicalDeviceVulkan13Features f13 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
-    f13.subgroupSizeControl = VK_TRUE;
-    f13.computeFullSubgroups = VK_TRUE;
-    VkPhysicalDeviceVulkan12Features f12 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, &f13};
+    uint32_t next = 0;
+    vkEnumerateDeviceExtensionProperties(g.phys, nullptr, &next, nullptr);
+    std::vector<VkExtensionProperties> exts(next);
+    vkEnumerateDeviceExtensionProperties(g.phys, nullptr, &next, exts.data());
+    bool size_ext = false;
+    for (const VkExtensionProperties& e : exts)
+        size_ext = size_ext || !strcmp(e.extensionName, "VK_EXT_subgroup_size_control");
+    vkGetPhysicalDeviceProperties(g.phys, &props);
+    bool core13 = props.apiVersion >= VK_API_VERSION_1_3;
+    VkPhysicalDeviceSubgroupSizeControlFeatures fsc = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES};
+    VkPhysicalDeviceFeatures2 have = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, core13 || size_ext ? &fsc : nullptr};
+    vkGetPhysicalDeviceFeatures2(g.phys, &have);
+    bool control = (core13 || size_ext) && fsc.subgroupSizeControl && fsc.computeFullSubgroups;
+    VkPhysicalDeviceVulkan12Features f12 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, control ? &fsc : nullptr};
     f12.storageBuffer8BitAccess = VK_TRUE;
     f12.shaderInt8 = VK_TRUE;
     f12.bufferDeviceAddress = VK_TRUE;
@@ -159,6 +171,11 @@ inline gpu_t make_gpu() {
     dci.queueCreateInfoCount = 1;
     dci.pQueueCreateInfos = &qci;
     dci.pEnabledFeatures = &f10;
+    const char* size_name = "VK_EXT_subgroup_size_control";
+    if (control && !core13) {
+        dci.enabledExtensionCount = 1;
+        dci.ppEnabledExtensionNames = &size_name;
+    }
     if ((r = vkCreateDevice(g.phys, &dci, nullptr, &g.dev)) != VK_SUCCESS)
         die("vkCreateDevice", r);
     vkGetDeviceQueue(g.dev, g.family, 0, &g.queue);

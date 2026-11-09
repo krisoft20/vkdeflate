@@ -97,7 +97,6 @@ struct lane_t {
 
 uint lane;
 uint lt_mask;
-uint g_zero;
 src_ref g_src;
 dst_ref g_dst;
 uint g_win;
@@ -956,7 +955,6 @@ void main() {
         t.dst = 0u;
         t.size = uint(min(g.size, 0x10000ul));
     }
-    g_zero = t.size >> 31;
     if (t.words < LANES) {
         if (lane == 0 && uint64_t(pc.status) != 0ul)
             pc.status.words[tile] = ERR_INPUT;
@@ -1022,5 +1020,5 @@ void main() {
     if (err == 0u && pos != t.size)
         err = ERR_SIZE;
     if (lane == 0 && uint64_t(pc.status) != 0ul)
-        pc.status.words[tile] = err | g_zero;
+        pc.status.words[tile] = err;
 }

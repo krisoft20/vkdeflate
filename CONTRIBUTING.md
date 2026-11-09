@@ -7,10 +7,12 @@ Close other programs that use the GPU, then:
     .\build.cmd              ./build.sh
     .\bench.cmd -khr         ./bench.sh -khr
 
-`bench` writes `results\<gpu>.csv`. Open a pull request with that file. Results from RDNA 4 cards
-(RX 9000 series) are wanted most: the kernel regressed there and I have no such card to test on. Linux GPUs and
-NVIDIA and Intel cards have never run it. Without `-khr` the script skips the Khronos layer and needs no python. The README table and the chart are redrawn from the CSV by
-`python tools\plot.py`; run it or leave it to me.
+`bench` writes `results\<gpu>.csv` with the times and `results\<gpu>.txt` with the driver, the subgroup size and
+what the shader compiler made of the kernel (registers, shared memory). Open a pull request with both files.
+
+Wanted most: RDNA 4 cards (RX 9000 series), where the kernel regressed and I have no card to test on, and any Linux
+GPU, NVIDIA or Intel card, which have never run it. Without `-khr` the script skips the Khronos layer and needs no
+python. The README table and the chart are redrawn from the CSV by `python tools\plot.py`; run it or leave it to me.
 
 ## Something failed
 
@@ -22,10 +24,9 @@ Open an issue with:
 
 ## Slower than it should be
 
-    .\tools\diag.cmd
-
-It times every kernel switch on five streams and saves what the shader compiler made of the kernel. Send the
-`results\diag` folder. It needs a finished `bench.cmd` run and takes about a minute.
+Open an issue with `results\<gpu>.txt` and `results\<gpu>.csv` from a `bench` run. The report says which subgroup
+size the driver gave, how many registers and how much shared memory the kernel takes and whether it spills; that
+is where a slow card usually differs.
 
 ## Changing the code
 
