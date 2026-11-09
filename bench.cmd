@@ -8,13 +8,16 @@ rem Close other programs that use the GPU first: kernel times move by 10 % and m
 rem The corpus is downloaded to test\silesia (66 MB); set SILESIA to a folder that already holds the twelve files.
 rem The GDeflate reference encoder (Microsoft's DirectStorage repository with NVIDIA's libdeflate fork) and the
 rem Khronos layer (Vulkan-ExtensionLayer, which needs python) are cloned and built in third_party_build.
+rem In a release package, which has no CMakeLists.txt, bench and the encoder come built.
 call "%~dp0tools\busy.cmd"
 if errorlevel 1 exit /b 1
+if not exist CMakeLists.txt goto :built
 call "%~dp0build.cmd"
 if errorlevel 1 exit /b 1
-call :corpus
-if errorlevel 1 exit /b 1
 call :encoder
+if errorlevel 1 exit /b 1
+:built
+call :corpus
 if errorlevel 1 exit /b 1
 call :vectors
 if errorlevel 1 exit /b 1

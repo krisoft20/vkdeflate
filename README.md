@@ -74,9 +74,13 @@ compress with the reference encoder, which `bench.cmd` builds as `third_party_bu
 
 ## Benchmark it on your card
 
-Windows with Visual Studio's C++ and CMake tools, and git; or Linux with CMake, a C++17 compiler, git, curl and
-unzip. The Vulkan SDK is not needed: the compiled shader is in the repository and the build fetches Khronos's Vulkan
-headers if it finds none.
+Without a compiler: download `vkdeflate-bench-<version>-windows.zip` or `-linux.tar.gz` from the
+[latest release](https://github.com/krisoft20/vkdeflate/releases/latest), unpack it and run `bench.cmd` or
+`./bench.sh` (Linux needs curl and unzip).
+
+From the source: Windows with Visual Studio's C++ and CMake tools, and git; or Linux with CMake, a C++17 compiler,
+git, curl and unzip. The Vulkan SDK is not needed: the compiled shader is in the repository and the build fetches
+Khronos's Vulkan headers if it finds none.
 
     .\build.cmd           ./build.sh
     .\bench.cmd           ./bench.sh          the Silesia corpus on your GPU, written to results\<gpu>.csv and .txt

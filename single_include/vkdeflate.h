@@ -7,13 +7,15 @@
 //     #include "vkdeflate.h"
 //
 // and plain #include "vkdeflate.h" everywhere else. Needs C++17 and the Vulkan headers; the compute
-// shader is inside as SPIR-V. A device needs Vulkan 1.3 with shaderInt64, shaderInt8,
-// storageBuffer8BitAccess, bufferDeviceAddress, vulkanMemoryModel and subgroup operations in compute.
+// shader is inside as SPIR-V. A device needs Vulkan 1.2 with shaderInt64, shaderInt8,
+// storageBuffer8BitAccess, bufferDeviceAddress, vulkanMemoryModel and a subgroup of 32 lanes, native or
+// through subgroup size control.
 //
 //     gdeflate::decompress(stream, n, out, size, err)                     CPU, any machine
 //     vkdeflate::describe(stream, header_bytes, n, tiles, out_size, err)  stream header -> tile table
 //     vkdeflate::attach(instance, phys, device, vkGetInstanceProcAddr, {}, err)
-//     vkdeflate::record(ctx, cmd, {src, tiles, dst, status, count})       one dispatch in your command buffer
+//     vkdeflate::record(ctx, cmd, {src, tiles, dst, status, count, flags}) one dispatch in your command buffer
+//     vkdeflate::cmd_decompress_memory(ctx, cmd, &info)                   VK_EXT_memory_decompression regions
 //     vkdeflate::create({}, err) / vkdeflate::decompress(ctx, ...)        standalone: own device, host memory
 //
 // MIT License

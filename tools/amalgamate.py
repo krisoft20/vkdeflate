@@ -28,13 +28,15 @@ HEAD = """// vkdeflate.h - GDeflate 1.0 decoder for Vulkan compute, with a CPU r
 //     #include "vkdeflate.h"
 //
 // and plain #include "vkdeflate.h" everywhere else. Needs C++17 and the Vulkan headers; the compute
-// shader is inside as SPIR-V. A device needs Vulkan 1.3 with shaderInt64, shaderInt8,
-// storageBuffer8BitAccess, bufferDeviceAddress, vulkanMemoryModel and subgroup operations in compute.
+// shader is inside as SPIR-V. A device needs Vulkan 1.2 with shaderInt64, shaderInt8,
+// storageBuffer8BitAccess, bufferDeviceAddress, vulkanMemoryModel and a subgroup of 32 lanes, native or
+// through subgroup size control.
 //
 //     gdeflate::decompress(stream, n, out, size, err)                     CPU, any machine
 //     vkdeflate::describe(stream, header_bytes, n, tiles, out_size, err)  stream header -> tile table
 //     vkdeflate::attach(instance, phys, device, vkGetInstanceProcAddr, {}, err)
-//     vkdeflate::record(ctx, cmd, {src, tiles, dst, status, count})       one dispatch in your command buffer
+//     vkdeflate::record(ctx, cmd, {src, tiles, dst, status, count, flags}) one dispatch in your command buffer
+//     vkdeflate::cmd_decompress_memory(ctx, cmd, &info)                   VK_EXT_memory_decompression regions
 //     vkdeflate::create({}, err) / vkdeflate::decompress(ctx, ...)        standalone: own device, host memory
 //
 """
@@ -97,7 +99,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--glslc')
     ap.add_argument('--out', default=os.path.join(ROOT, 'single_include', 'vkdeflate.h'))
+    ap.add_argument('--check', action='store_true')
     a = ap.parse_args()
+    pre = os.path.join(ROOT, 'prebuilt', 'tile_spv.inc')
 
     decl = drop(body(read('src/gdeflate.h')), '#pragma once') + '\n' + drop(body(read('src/vkdeflate.h')), '#pragma once')
     cpu = drop(body(read('src/gdeflate.cpp')), '#include "gdeflate.h"')
@@ -105,7 +109,14 @@ def main():
                '#include "gdeflate.h"', '#include "vkdeflate.h"')
     for m in sorted(KEEP):
         gpu = swap(gpu, '#define %s\n' % m, '#ifndef %s\n#define %s\n#endif\n' % (m, m))
-    spv = spirv(find_glslc(a.glslc))
+    if a.check:
+        with open(pre, encoding='utf-8') as f:
+            head, spv = f.read().split('\n', 1)
+        spv = spv.strip()
+        if tile_hash() not in head:
+            sys.exit('amalgamate: prebuilt/tile_spv.inc is older than src/tile.comp')
+    else:
+        spv = spirv(find_glslc(a.glslc))
     gpu = swap(gpu, '#include "tile_spv.inc"\n', spv + '\n')
 
     macros = []
@@ -121,12 +132,18 @@ def main():
             + cpu + '\n' + gpu + '\n' + ''.join('#undef %s\n' % m for m in macros) +
             '\n#if defined(_MSC_VER)\n#pragma warning(pop)\n#endif\n\n#endif\n')
 
+    if a.check:
+        with open(a.out, encoding='utf-8') as f:
+            if f.read().replace('\r', '') != text:
+                sys.exit('amalgamate: %s is older than src/' % os.path.relpath(a.out, ROOT))
+        print('amalgamate: %s and prebuilt/tile_spv.inc match src/' % os.path.relpath(a.out, ROOT))
+        return
+
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     with open(a.out, 'w', encoding='utf-8', newline='\n') as f:
         f.write(text)
     print('amalgamate: %s, %d bytes, %d lines' % (os.path.relpath(a.out, ROOT), len(text), text.count('\n')))
 
-    pre = os.path.join(ROOT, 'prebuilt', 'tile_spv.inc')
     os.makedirs(os.path.dirname(pre), exist_ok=True)
     with open(pre, 'w', encoding='utf-8', newline='\n') as f:
         f.write('// src/tile.comp compiled by glslc, sha256 of the source %s\n%s\n' % (tile_hash(), spv))

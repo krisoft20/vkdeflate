@@ -2,13 +2,16 @@
 
 ## A result from your card
 
-Close other programs that use the GPU, then:
+Close other programs that use the GPU. The quickest way is the benchmark package from the
+[latest release](https://github.com/krisoft20/vkdeflate/releases/latest): unpack it and run `bench.cmd` or `./bench.sh`.
+From the source:
 
     .\build.cmd              ./build.sh
     .\bench.cmd -khr         ./bench.sh -khr
 
 `bench` writes `results\<gpu>.csv` with the times and `results\<gpu>.txt` with the driver, the subgroup size and
-what the shader compiler made of the kernel (registers, shared memory). Open a pull request with both files.
+what the shader compiler made of the kernel (registers, shared memory). Open a pull request or an issue with both
+files.
 
 Wanted most: RDNA 4 cards (RX 9000 series), where the kernel regressed and I have no card to test on, and any Linux
 GPU, NVIDIA or Intel card, which have never run it. Without `-khr` the script skips the Khronos layer and needs no
@@ -41,5 +44,6 @@ is where a slow card usually differs.
       build\single_test.exe test\vectors\xml.l6.gdz
 
 - A change to `src\tile.comp` needs `glslc`, from the Vulkan SDK or as `-DGLSLC=path` in `VKDEFLATE_CMAKE_ARGS`.
-  `single_header` also refreshes `prebuilt\tile_spv.inc`; commit both.
+  `single_header` also refreshes `prebuilt\tile_spv.inc`; commit both. CI fails when they are older than `src\`
+  (`python tools\amalgamate.py --check`).
 - A change that is meant to be faster comes with numbers: before and after, same streams, runs interleaved.

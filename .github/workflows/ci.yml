@@ -1,0 +1,64 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: single header and prebuilt shader match src
+        run: python tools/amalgamate.py --check
+
+      - name: build
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: build.cmd
+
+      - name: build
+        if: runner.os == 'Linux'
+        run: ./build.sh
+
+      - name: reference encoder
+        run: |
+          git clone --depth 1 https://github.com/microsoft/DirectStorage third_party_build/DirectStorage
+          git -C third_party_build/DirectStorage submodule update --init --depth 1 GDeflate/3rdparty/libdeflate
+
+      - name: build the reference encoder
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: tools\gdref\build.cmd
+
+      - name: build the reference encoder
+        if: runner.os == 'Linux'
+        run: |
+          cmake -S tools/gdref -B third_party_build/gdref/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build third_party_build/gdref/build
+
+      - name: cpu decoder against the reference encoder
+        run: |
+          mkdir -p test/ci
+          cp single_include/vkdeflate.h test/ci/text
+          cp prebuilt/tile_spv.inc test/ci/spirv
+          cp build/bench* test/ci/binary
+          cat single_include/vkdeflate.h build/gdz* prebuilt/tile_spv.inc > test/ci/mixed
+          head -c 70000 /dev/zero > test/ci/zeros
+          head -c 200000 /dev/urandom > test/ci/random
+          for f in text spirv binary mixed zeros random; do
+              for level in 1 6 12; do
+                  third_party_build/gdref/build/gdref c test/ci/$f test/ci/$f.l$level.gdz $level
+                  build/gdz test/ci/$f.l$level.gdz -ref test/ci/$f
+              done
+          done
+          build/gdz -fuzz test/ci/mixed.l6.gdz -n 300

@@ -119,6 +119,7 @@ Specialization constants, one binary for all.
     build\gdz.exe file.gdz -trace N                          matches covering output byte N
     build\gdz.exe file.gdz -gpu -v                           registers, shared memory, ISA
     cmake --build build --target single_header               regenerate single_include\vkdeflate.h, prebuilt\tile_spv.inc
+    python tools\amalgamate.py --check                       both match src\ (CI runs this)
     build\bench.exe -list test\vectors\silesia.txt -csvdir results   times, plus a device and compiler report
     python tools\plot.py                                     redraw docs\img, refresh the README table
 

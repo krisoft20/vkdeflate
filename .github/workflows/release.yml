@@ -1,0 +1,116 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            name: windows
+          - os: ubuntu-22.04
+            name: linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: reference encoder
+        run: |
+          git clone --depth 1 https://github.com/microsoft/DirectStorage third_party_build/DirectStorage
+          git -C third_party_build/DirectStorage submodule update --init --depth 1 GDeflate/3rdparty/libdeflate
+
+      - name: build
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          call tools\vsenv.cmd
+          cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded || exit /b 1
+          cmake --build build --target bench gdz || exit /b 1
+          cmake -G Ninja -S tools\gdref -B third_party_build\gdref\build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded || exit /b 1
+          cmake --build third_party_build\gdref\build
+
+      - name: build
+        if: runner.os == 'Linux'
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc"
+          cmake --build build --target bench gdz
+          cmake -S tools/gdref -B third_party_build/gdref/build -DCMAKE_BUILD_TYPE=Release "-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc"
+          cmake --build third_party_build/gdref/build
+
+      - name: package
+        run: |
+          P=vkdeflate-bench-${GITHUB_REF_NAME}-${{ matrix.name }}
+          mkdir -p $P/build $P/tools $P/third_party_build/gdref/build $P/licenses
+          DS=third_party_build/DirectStorage
+          cp LICENSE $P/
+          cp $DS/LICENSE $P/licenses/DirectStorage.txt
+          cp $DS/GDeflate/3rdparty/libdeflate/COPYING $P/licenses/libdeflate.txt
+          if [ "$RUNNER_OS" = "Windows" ]; then
+              cp bench.cmd $P/
+              cp tools/busy.cmd tools/vsenv.cmd $P/tools/
+              cp build/bench.exe build/gdz.exe $P/build/
+              cp third_party_build/gdref/build/gdref.exe $P/third_party_build/gdref/build/
+              RUN='bench.cmd'
+          else
+              cp bench.sh $P/
+              cp tools/busy.sh $P/tools/
+              cp build/bench build/gdz $P/build/
+              cp third_party_build/gdref/build/gdref $P/third_party_build/gdref/build/
+              RUN='./bench.sh'
+          fi
+          printf '%s\n' \
+              "vkdeflate ${GITHUB_REF_NAME}, benchmark package" \
+              "" \
+              "Close other programs that use the GPU, then run $RUN. It downloads the Silesia corpus (66 MB)," \
+              "compresses it with the GDeflate reference encoder, decodes every stream on the GPU, checks each byte" \
+              "against the CPU decoder and writes results/<gpu>.csv and results/<gpu>.txt." \
+              "" \
+              "Send both files: a pull request or an issue at https://github.com/krisoft20/vkdeflate" \
+              "" \
+              "third_party_build/gdref is the reference encoder from Microsoft's DirectStorage repository with Eric Biggers's" \
+              "libdeflate; their licenses are in licenses/." > $P/README.txt
+          if [ "$RUNNER_OS" = "Windows" ]; then
+              7z a -tzip $P.zip $P >/dev/null
+          else
+              tar -czf $P.tar.gz $P
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.name }}
+          path: vkdeflate-bench-*.*
+
+  release:
+    needs: package
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -x
+          ls -l dist
+          gh api "repos/$GITHUB_REPOSITORY/git/refs/tags/$GITHUB_REF_NAME" --jq .object > ref.json
+          cat ref.json
+          if [ "$(jq -r .type ref.json)" = "tag" ]; then
+              gh api "repos/$GITHUB_REPOSITORY/git/tags/$(jq -r .sha ref.json)" --jq .message > notes.txt
+          else
+              echo "$GITHUB_REF_NAME" > notes.txt
+          fi
+          cat notes.txt
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.txt
+          gh release upload "$GITHUB_REF_NAME" dist/* single_include/vkdeflate.h --clobber

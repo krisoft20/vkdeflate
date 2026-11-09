@@ -6,11 +6,15 @@
 # The corpus is downloaded to test/silesia (66 MB); SILESIA may name a folder that already holds the twelve files.
 # The GDeflate reference encoder (Microsoft's DirectStorage repository with NVIDIA's libdeflate fork) and the
 # Khronos layer (Vulkan-ExtensionLayer, which needs python) are cloned and built in third_party_build;
-# GDREF_BUILD and LAYER_BUILD may name other build folders.
+# GDREF_BUILD and LAYER_BUILD may name other build folders. In a release package, which has no CMakeLists.txt,
+# bench and the encoder come built.
 set -e
 cd "$(dirname "$0")"
 . tools/busy.sh
-./build.sh
+GDREF_BUILD=${GDREF_BUILD:-third_party_build/gdref/build}
+if [ -f CMakeLists.txt ]; then
+    ./build.sh
+fi
 
 SIL=${SILESIA:-$PWD/test/silesia}
 if [ ! -f "$SIL/dickens" ]; then
@@ -22,14 +26,15 @@ if [ ! -f "$SIL/dickens" ]; then
 fi
 
 DS=third_party_build/DirectStorage
-if [ ! -f "$DS/GDeflate/3rdparty/libdeflate/libdeflate.h" ]; then
-    echo "cloning the gdeflate reference encoder"
-    [ -d "$DS/.git" ] || git clone --depth 1 https://github.com/microsoft/DirectStorage "$DS"
-    git -C "$DS" submodule update --init --depth 1 GDeflate/3rdparty/libdeflate
+if [ -f CMakeLists.txt ]; then
+    if [ ! -f "$DS/GDeflate/3rdparty/libdeflate/libdeflate.h" ]; then
+        echo "cloning the gdeflate reference encoder"
+        [ -d "$DS/.git" ] || git clone --depth 1 https://github.com/microsoft/DirectStorage "$DS"
+        git -C "$DS" submodule update --init --depth 1 GDeflate/3rdparty/libdeflate
+    fi
+    [ -f "$GDREF_BUILD/CMakeCache.txt" ] || cmake -S tools/gdref -B "$GDREF_BUILD" -DCMAKE_BUILD_TYPE=Release
+    cmake --build "$GDREF_BUILD"
 fi
-GDREF_BUILD=${GDREF_BUILD:-third_party_build/gdref/build}
-[ -f "$GDREF_BUILD/CMakeCache.txt" ] || cmake -S tools/gdref -B "$GDREF_BUILD" -DCMAKE_BUILD_TYPE=Release
-cmake --build "$GDREF_BUILD"
 
 mkdir -p test/vectors
 rm -f test/vectors/silesia.txt
