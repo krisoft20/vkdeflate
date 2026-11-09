@@ -65,46 +65,47 @@ constexpr uint32_t lanes = 32;
     X(vkCreateDevice)                           \
     X(vkGetDeviceProcAddr)
 
-#define VK_FN_PIPELINE(X)          \
-    X(vkCreateShaderModule)        \
-    X(vkDestroyShaderModule)       \
-    X(vkCreatePipelineLayout)      \
-    X(vkDestroyPipelineLayout)     \
-    X(vkCreateComputePipelines)    \
-    X(vkDestroyPipeline)           \
-    X(vkCmdBindPipeline)           \
-    X(vkCmdPushConstants)          \
-    X(vkCmdDispatch)
-
-#define VK_FN_DEVICE(X)              \
-    X(vkDestroyDevice)               \
-    X(vkGetDeviceQueue)              \
-    X(vkDeviceWaitIdle)              \
+#define VK_FN_PIPELINE(X)            \
+    X(vkCreateShaderModule)          \
+    X(vkDestroyShaderModule)         \
+    X(vkCreatePipelineLayout)        \
+    X(vkDestroyPipelineLayout)       \
+    X(vkCreateComputePipelines)      \
+    X(vkDestroyPipeline)             \
+    X(vkCmdBindPipeline)             \
+    X(vkCmdPushConstants)            \
+    X(vkCmdDispatch)                 \
+    X(vkCmdUpdateBuffer)             \
+    X(vkCmdPipelineBarrier)          \
     X(vkCreateBuffer)                \
     X(vkDestroyBuffer)               \
     X(vkGetBufferMemoryRequirements) \
     X(vkGetBufferDeviceAddress)      \
     X(vkAllocateMemory)              \
     X(vkFreeMemory)                  \
-    X(vkBindBufferMemory)            \
-    X(vkMapMemory)                   \
-    X(vkCreateCommandPool)           \
-    X(vkDestroyCommandPool)          \
-    X(vkResetCommandPool)            \
-    X(vkAllocateCommandBuffers)      \
-    X(vkBeginCommandBuffer)          \
-    X(vkEndCommandBuffer)            \
-    X(vkCmdCopyBuffer)               \
-    X(vkCmdPipelineBarrier)          \
-    X(vkCmdResetQueryPool)           \
-    X(vkCmdWriteTimestamp)           \
-    X(vkCreateQueryPool)             \
-    X(vkDestroyQueryPool)            \
-    X(vkGetQueryPoolResults)         \
-    X(vkQueueSubmit)                 \
-    X(vkCreateFence)                 \
-    X(vkDestroyFence)                \
-    X(vkWaitForFences)               \
+    X(vkBindBufferMemory)
+
+#define VK_FN_DEVICE(X)         \
+    X(vkDestroyDevice)          \
+    X(vkGetDeviceQueue)         \
+    X(vkDeviceWaitIdle)         \
+    X(vkMapMemory)              \
+    X(vkCreateCommandPool)      \
+    X(vkDestroyCommandPool)     \
+    X(vkResetCommandPool)       \
+    X(vkAllocateCommandBuffers) \
+    X(vkBeginCommandBuffer)     \
+    X(vkEndCommandBuffer)       \
+    X(vkCmdCopyBuffer)          \
+    X(vkCmdResetQueryPool)      \
+    X(vkCmdWriteTimestamp)      \
+    X(vkCreateQueryPool)        \
+    X(vkDestroyQueryPool)       \
+    X(vkGetQueryPoolResults)    \
+    X(vkQueueSubmit)            \
+    X(vkCreateFence)            \
+    X(vkDestroyFence)           \
+    X(vkWaitForFences)          \
     X(vkResetFences)
 
 #define VK_FN_STATS(X)                                    \
@@ -138,7 +139,12 @@ struct push_t {
     VkDeviceAddress tiles;
     VkDeviceAddress dst;
     VkDeviceAddress status;
+    VkDeviceAddress count;
+    uint32_t stride;
+    uint32_t pad;
 };
+
+constexpr VkDeviceSize REGION_RING = 1 << 20;
 
 struct ctx_t {
 #if defined(_WIN32)
@@ -173,7 +179,8 @@ struct ctx_t {
     VkPipelineLayout layout = VK_NULL_HANDLE;
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkPipeline pipeline_runs = VK_NULL_HANDLE;
-    buf_t in, tiles, out, status, up, down;
+    buf_t in, tiles, out, status, up, down, regions;
+    VkDeviceSize regions_at = 0;
     std::string err;
 };
 
@@ -578,6 +585,7 @@ ctx_t* attach(VkInstance instance, VkPhysicalDevice phys, VkDevice dev, PFN_vkGe
     }
 #define LOAD_DEVICE_EXT(fn) g->f.fn = (PFN_##fn)g->f.vkGetDeviceProcAddr(dev, #fn);
     VK_FN_PIPELINE(LOAD_DEVICE_EXT)
+    g->f.vkGetPhysicalDeviceMemoryProperties(phys, &g->mem);
     bool control = false;
     if (!pick_subgroup(*g, gipa, cfg, control) || !make_pipeline(*g)) {
         err = g->err;
@@ -599,6 +607,7 @@ void destroy(ctx_t* g) {
         free_buf(*g, g->status);
         free_buf(*g, g->up);
         free_buf(*g, g->down);
+        free_buf(*g, g->regions);
         if (g->pipeline)
             g->f.vkDestroyPipeline(g->dev, g->pipeline, nullptr);
         if (g->pipeline_runs)
@@ -658,14 +667,75 @@ uint32_t job_flags(const std::vector<tile_desc_t>& tiles, size_t out_size) {
     return words * 4 * 20 < out_size ? JOB_RUNS : 0u;
 }
 
+static void dispatch(ctx_t* g, VkCommandBuffer cmd, const push_t& pc, uint32_t groups, uint32_t flags) {
+    bool runs = (flags & JOB_RUNS) != 0 && g->pipeline_runs;
+    g->f.vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, runs ? g->pipeline_runs : g->pipeline);
+    g->f.vkCmdPushConstants(cmd, g->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
+    g->f.vkCmdDispatch(cmd, groups, 1, 1);
+}
+
 void record(ctx_t* g, VkCommandBuffer cmd, const job_t& job) {
     if (!job.num_tiles)
         return;
-    push_t pc = {job.src, job.tiles, job.dst, job.status};
-    bool runs = (job.flags & JOB_RUNS) != 0 && g->pipeline_runs;
-    g->f.vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, runs ? g->pipeline_runs : g->pipeline);
-    g->f.vkCmdPushConstants(cmd, g->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
-    g->f.vkCmdDispatch(cmd, job.num_tiles, 1, 1);
+    dispatch(g, cmd, push_t{job.src, job.tiles, job.dst, job.status, 0, 0, 0}, job.num_tiles, job.flags);
+}
+
+uint32_t region_flags(const region_t* regions, uint32_t count) {
+    uint64_t in = 0, out = 0;
+    for (uint32_t i = 0; i < count; i++) {
+        in += regions[i].csize;
+        out += regions[i].size;
+    }
+    return in * 20 < out ? JOB_RUNS : 0u;
+}
+
+void record_regions(ctx_t* g, VkCommandBuffer cmd, VkDeviceAddress regions, uint32_t count, uint32_t stride,
+                    VkDeviceAddress status, uint32_t flags) {
+    if (!count)
+        return;
+    dispatch(g, cmd, push_t{0, regions, 0, status, 0, stride, 0}, count, flags);
+}
+
+void record_regions_indirect(ctx_t* g, VkCommandBuffer cmd, VkDeviceAddress regions, VkDeviceAddress count,
+                             uint32_t max_count, uint32_t stride, VkDeviceAddress status, uint32_t flags) {
+    if (!max_count)
+        return;
+    dispatch(g, cmd, push_t{0, regions, 0, status, count, stride, 0}, max_count, flags);
+}
+
+bool cmd_decompress_memory(ctx_t* g, VkCommandBuffer cmd, const region_t* regions, uint32_t count) {
+    constexpr VkBufferUsageFlags usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    constexpr uint32_t per_dispatch = (uint32_t)(REGION_RING / 2 / sizeof(region_t));
+    if (!count)
+        return true;
+    if (!make_buf(*g, g->regions, REGION_RING, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0))
+        return false;
+    std::vector<region_t> sorted(regions, regions + count);
+    std::stable_sort(sorted.begin(), sorted.end(), [](const region_t& a, const region_t& b) { return a.csize > b.csize; });
+    uint32_t flags = region_flags(regions, count);
+    for (uint32_t first = 0; first < count; first += per_dispatch) {
+        uint32_t n = std::min(per_dispatch, count - first);
+        VkDeviceSize bytes = (VkDeviceSize)n * sizeof(region_t);
+        if (g->regions_at + bytes > REGION_RING)
+            g->regions_at = 0;
+        VkMemoryBarrier before = {VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr, VK_ACCESS_SHADER_READ_BIT,
+                                  VK_ACCESS_TRANSFER_WRITE_BIT};
+        g->f.vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1,
+                                  &before, 0, nullptr, 0, nullptr);
+        for (VkDeviceSize done = 0; done < bytes; done += 65536) {
+            VkDeviceSize piece = std::min<VkDeviceSize>(65536, bytes - done);
+            g->f.vkCmdUpdateBuffer(cmd, g->regions.buf, g->regions_at + done, piece,
+                                   (const uint8_t*)(sorted.data() + first) + done);
+        }
+        VkMemoryBarrier after = {VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                 VK_ACCESS_SHADER_READ_BIT};
+        g->f.vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1,
+                                  &after, 0, nullptr, 0, nullptr);
+        record_regions(g, cmd, g->regions.addr + g->regions_at, n, sizeof(region_t), 0, flags);
+        g->regions_at += bytes;
+    }
+    return true;
 }
 
 bool decompress(ctx_t* g, const uint8_t* in, size_t n, uint8_t* out, size_t size, std::string& err, timing_t* timing) {

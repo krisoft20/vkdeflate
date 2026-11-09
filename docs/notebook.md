@@ -28,6 +28,8 @@ Each change against the previous kept one, separate builds, `bench` interleaved,
 | run-heavy streams (compressed under 1/20) on a pipeline padded to 4608 bytes | provinces 3.00 to 2.37 | yes |
 | two waves per tile, one decoding, one copying | +1 to +34 %; the decoding wave alone -46 to -61 % | no |
 | 16-byte pattern stores, 128-byte aligned pattern chunks, period doubling | 0 to +4 % | no |
+| per-tile source and destination pointers, for the region API | 0 to +2.3 % on the tile path | yes |
+| region path (`cmd_decompress_memory`, upload included) against the tile path | 0 to +0.8 % | |
 
 What the ablations showed, share of kernel time:
 

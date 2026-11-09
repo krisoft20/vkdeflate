@@ -3,7 +3,7 @@
 // can be loaded, with that layer too: the same device-local buffers, GPU timestamps around each
 // decoder, both outputs checked against the CPU decoder. Writes one csv row per stream.
 //
-//   bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-ms N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct]
+//   bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-ms N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct] [-regions]
 //
 // Every stream gets -warm rounds (10), then at least -rounds (30) and at least -ms milliseconds (500) of
 // measured rounds; the best one counts.
@@ -139,6 +139,7 @@ struct args_t {
     double min_ms = 500.0;
     bool direct = false;
     bool layer = true;
+    bool regions = false;
 };
 
 struct row_t {
@@ -408,9 +409,13 @@ static void run_layer(bool direct, const std::vector<VkDecompressMemoryRegionNV>
     fence_all();
 }
 
-static void run_ours(vkdeflate::ctx_t* ctx, const vkdeflate::job_t& job, uint32_t q) {
+static void run_ours(vkdeflate::ctx_t* ctx, const vkdeflate::job_t& job, const std::vector<vkdeflate::region_t>& regs,
+                     uint32_t q) {
     vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queries, q);
-    vkdeflate::record(ctx, cmd, job);
+    if (regs.empty())
+        vkdeflate::record(ctx, cmd, job);
+    else
+        vkdeflate::cmd_decompress_memory(ctx, cmd, regs.data(), (uint32_t)regs.size());
     vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queries, q + 1);
     fence_all();
 }
@@ -505,6 +510,12 @@ static bool run_file(const args_t& a, vkdeflate::ctx_t* ctx, const std::string& 
     memcpy(count.map, &n, 4);
     copy(up, src, in_size);
     vkdeflate::job_t job = {src.addr, tiles.addr, dst_vk.addr, status.addr, n, vkdeflate::job_flags(descs, out_size)};
+    std::vector<vkdeflate::region_t> ours;
+    if (a.regions) {
+        for (const vkdeflate::tile_desc_t& t : descs)
+            ours.push_back({src.addr + 4ull * t.src, dst_vk.addr + t.dst, 4ull * t.words, t.size});
+        memset(status.map, 0, n * 4);
+    }
 
     double best_khr = 1e30, best_vk = 1e30;
     auto measured = std::chrono::steady_clock::now();
@@ -518,7 +529,7 @@ static bool run_file(const args_t& a, vkdeflate::ctx_t* ctx, const std::string& 
         fence_all();
         if (has_layer && khr_first)
             run_layer(a.direct, regs, regions, count, 0);
-        run_ours(ctx, job, 2);
+        run_ours(ctx, job, ours, 2);
         if (has_layer && !khr_first)
             run_layer(a.direct, regs, regions, count, 0);
         submit_wait();
@@ -651,6 +662,8 @@ int main(int argc, char** argv) {
             a.direct = true;
         else if (s == "-nolayer")
             a.layer = false;
+        else if (s == "-regions")
+            a.regions = true;
         else if (s[0] == '-') {
             printf("unknown argument %s\n", argv[i]);
             return 1;
@@ -658,7 +671,7 @@ int main(int argc, char** argv) {
             a.files.push_back(s);
     }
     if (a.files.empty()) {
-        printf("usage: bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-ms N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct]\n"
+        printf("usage: bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-ms N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct] [-regions]\n"
                "       [-root N] [-droot N] [-ring N] [-pad N] [-x N] [-tile-count N]\n");
         return 1;
     }

@@ -8,8 +8,9 @@
 - One workgroup = one subgroup of 32 = one tile. The pipeline requires subgroup size 32; if the device cannot,
   it takes the device's size and the extra lanes exit.
 - Lane `i` owns bitstream `i`, in a 64-bit buffer.
-- Four buffers by device address in push constants, no descriptor sets: stream (words), tile table, output
-  (bytes), one status word per tile.
+- Push constants, no descriptor sets: stream, tile or region table, output, status (0 = none), count (0 = none),
+  region stride (0 = tile table). Each workgroup turns its tile into a source and a destination pointer first; the
+  loop indexes from 0.
 - Loads on the hot path are unconditional with clamped addresses. A load under an `if` gets its own wait.
 
 ## Dispatch
@@ -17,6 +18,15 @@
 - `describe()` returns the tiles sorted by compressed size, largest first. `status[i]` belongs to `tiles[i]`.
 - `job_flags()` sets `JOB_RUNS` when the compressed stream is under 1/20 of its output. `record()` then uses a
   second pipeline with 4608 bytes of unused shared memory: about 4 waves per SIMD instead of 10 on RDNA2.
+
+| call | table | tiles | status |
+|---|---|---|---|
+| `record()` | `tile_desc_t`: word offset, words, byte offset, size | `num_tiles` | yes |
+| `record_regions()` | `region_t` = `VkDecompressMemoryRegionEXT`, any stride | host count | optional |
+| `record_regions_indirect()` | the same | `max_count` workgroups, those at or past `*count` exit | optional |
+| `cmd_decompress_memory()` | regions from host memory, sorted, `vkCmdUpdateBuffer` into a 1 MB ring | host count | no |
+
+A region shorter than 32 words fails with `ERR_INPUT` before any read.
 
 ## A round
 

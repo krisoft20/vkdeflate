@@ -98,6 +98,13 @@ namespace vkdeflate {
 
     inline constexpr uint32_t JOB_RUNS = 1;
 
+    struct region_t {
+        VkDeviceAddress src;
+        VkDeviceAddress dst;
+        VkDeviceSize csize;
+        VkDeviceSize size;
+    };
+
     struct ctx_t;
 
     ctx_t* create(const config_t& cfg, std::string& err);
@@ -111,6 +118,22 @@ namespace vkdeflate {
                   std::string& err);
     uint32_t job_flags(const std::vector<tile_desc_t>& tiles, size_t out_size);
     void record(ctx_t* ctx, VkCommandBuffer cmd, const job_t& job);
+
+    uint32_t region_flags(const region_t* regions, uint32_t count);
+    void record_regions(ctx_t* ctx, VkCommandBuffer cmd, VkDeviceAddress regions, uint32_t count,
+                        uint32_t stride = sizeof(region_t), VkDeviceAddress status = 0, uint32_t flags = 0);
+    void record_regions_indirect(ctx_t* ctx, VkCommandBuffer cmd, VkDeviceAddress regions, VkDeviceAddress count,
+                                 uint32_t max_count, uint32_t stride = sizeof(region_t), VkDeviceAddress status = 0,
+                                 uint32_t flags = 0);
+    bool cmd_decompress_memory(ctx_t* ctx, VkCommandBuffer cmd, const region_t* regions, uint32_t count);
+
+#if defined(VK_EXT_memory_decompression)
+    static_assert(sizeof(region_t) == sizeof(VkDecompressMemoryRegionEXT), "region_t mirrors VkDecompressMemoryRegionEXT");
+
+    inline bool cmd_decompress_memory(ctx_t* ctx, VkCommandBuffer cmd, const VkDecompressMemoryInfoEXT* info) {
+        return cmd_decompress_memory(ctx, cmd, (const region_t*)info->pRegions, info->regionCount);
+    }
+#endif
 
     bool decompress(ctx_t* ctx, const uint8_t* in, size_t n, uint8_t* out, size_t size, std::string& err,
                     timing_t* timing = nullptr);

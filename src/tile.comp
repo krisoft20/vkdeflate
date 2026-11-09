@@ -28,18 +28,28 @@ struct tile_t {
     uint size;
 };
 
+struct region_t {
+    uint64_t src;
+    uint64_t dst;
+    uint64_t csize;
+    uint64_t size;
+};
+
 layout(buffer_reference, std430, buffer_reference_align = 4) restrict readonly buffer src_ref { uint words[]; };
 layout(buffer_reference, std430, buffer_reference_align = 4) restrict readonly buffer tiles_ref { tile_t tiles[]; };
 layout(buffer_reference, std430, buffer_reference_align = 4) subgroupcoherent buffer dst_ref { uint8_t bytes[]; };
 layout(buffer_reference, std430, buffer_reference_align = 4) subgroupcoherent buffer dst32_ref { uint words[]; };
-layout(buffer_reference, std430, buffer_reference_align = 16) subgroupcoherent buffer dst128_ref { uvec4 q[]; };
 layout(buffer_reference, std430, buffer_reference_align = 4) restrict writeonly buffer status_ref { uint words[]; };
+layout(buffer_reference, std430, buffer_reference_align = 8) restrict readonly buffer region_ref { region_t region; };
+layout(buffer_reference, std430, buffer_reference_align = 4) restrict readonly buffer count_ref { uint n; };
 
 layout(push_constant) uniform pc_t {
     src_ref src;
     tiles_ref tiles;
     dst_ref dst;
     status_ref status;
+    count_ref count;
+    uint stride;
 } pc;
 
 const uint LANES = 32;
@@ -88,6 +98,8 @@ struct lane_t {
 uint lane;
 uint lt_mask;
 uint g_zero;
+src_ref g_src;
+dst_ref g_dst;
 uint g_win;
 bool g_mirror;
 bool g_cache;
@@ -120,23 +132,23 @@ void len_or(uint s, uint v) {
 }
 
 uint in_word(uint i) {
-    return pc.src.words[i];
+    return g_src.words[i];
 }
 
 uint out_get(uint i) {
-    return uint(pc.dst.bytes[i]);
+    return uint(g_dst.bytes[i]);
 }
 
 void out_set(uint i, uint v) {
-    pc.dst.bytes[i] = uint8_t(v);
+    g_dst.bytes[i] = uint8_t(v);
 }
 
 void out_set32(uint i, uint v) {
-    dst32_ref(uint64_t(pc.dst)).words[i >> 2] = v;
+    dst32_ref(uint64_t(g_dst)).words[i >> 2] = v;
 }
 
 uint out_word(uint w) {
-    return dst32_ref(uint64_t(pc.dst)).words[w];
+    return dst32_ref(uint64_t(g_dst)).words[w];
 }
 
 uint ring_get(uint x) {
@@ -926,8 +938,30 @@ void main() {
         return;
     lt_mask = (1u << lane) - 1u;
     uint tile = gl_WorkGroupID.x;
-    tile_t t = pc.tiles.tiles[tile];
+    if (uint64_t(pc.count) != 0ul && tile >= pc.count.n)
+        return;
+    tile_t t;
+    if (pc.stride == 0u) {
+        t = pc.tiles.tiles[tile];
+        g_src = src_ref(uint64_t(pc.src) + uint64_t(t.src) * 4ul);
+        g_dst = dst_ref(uint64_t(pc.dst) + uint64_t(t.dst));
+        t.src = 0u;
+        t.dst = 0u;
+    } else {
+        region_t g = region_ref(uint64_t(pc.tiles) + uint64_t(tile) * pc.stride).region;
+        g_src = src_ref(g.src);
+        g_dst = dst_ref(g.dst);
+        t.src = 0u;
+        t.words = uint((min(g.csize, 0x40000ul) + 3ul) >> 2);
+        t.dst = 0u;
+        t.size = uint(min(g.size, 0x10000ul));
+    }
     g_zero = t.size >> 31;
+    if (t.words < LANES) {
+        if (lane == 0 && uint64_t(pc.status) != 0ul)
+            pc.status.words[tile] = ERR_INPUT;
+        return;
+    }
     g_win = 0u;
     reader_t r;
     r.src = t.src;
@@ -987,6 +1021,6 @@ void main() {
     }
     if (err == 0u && pos != t.size)
         err = ERR_SIZE;
-    if (lane == 0)
+    if (lane == 0 && uint64_t(pc.status) != 0ul)
         pc.status.words[tile] = err | g_zero;
 }

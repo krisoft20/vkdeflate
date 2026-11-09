@@ -77,6 +77,11 @@ add_executable(single_test tools/single_test.cpp)
 target_include_directories(single_test PRIVATE ${VULKAN_INCLUDE})
 set_target_properties(single_test PROPERTIES CXX_STANDARD 17)
 
+foreach(e decompress batch regions indirect)
+    add_executable(example_${e} examples/${e}.cpp)
+    target_link_libraries(example_${e} PRIVATE vkdeflate)
+endforeach()
+
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_FOUND AND GLSLC)
     add_custom_target(single_header
@@ -85,7 +90,7 @@ if(Python3_FOUND AND GLSLC)
         VERBATIM)
 endif()
 
-foreach(t vkdeflate gdz attach_test bench single_test)
+foreach(t vkdeflate gdz attach_test bench single_test example_decompress example_batch example_regions example_indirect)
     if(MSVC)
         target_compile_options(${t} PRIVATE /W4)
     else()

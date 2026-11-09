@@ -55,6 +55,16 @@ vkdeflate::record(ctx, cmd, {src_addr, tiles_addr, dst_addr, status_addr, (uint3
 `describe()` returns the tiles largest first, which shortens the dispatch; `status[i]` belongs to `tiles[i]`.
 `job_flags()` picks the pipeline for streams that are mostly long runs.
 
+Code written for `VK_EXT_memory_decompression` keeps its regions:
+
+```cpp
+vkdeflate::cmd_decompress_memory(ctx, cmd, &info);   // the VkDecompressMemoryInfoEXT you would pass to the driver
+vkdeflate::record_regions_indirect(ctx, cmd, regions_addr, count_addr, max_count, stride);
+```
+
+[`examples/`](examples/README.md) has four short programs, from one call that does everything to a count written on
+the GPU, and the table from the extension's names to these.
+
 `record()` is one dispatch in your command buffer. You own the barriers around it and read the status words
 (0 is good, `vkdeflate::tile_error()` names the rest). The device needs Vulkan 1.3 with `shaderInt64`, `shaderInt8`,
 `storageBuffer8BitAccess`, `bufferDeviceAddress`, `vulkanMemoryModel`, `subgroupSizeControl` and
