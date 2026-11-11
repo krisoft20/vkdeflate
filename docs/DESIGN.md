@@ -76,12 +76,13 @@ tile end the own-lane copy tests each byte instead of overshooting.
   overshoot bytes outside the window go to a spare byte.
 - Lanes read what other lanes stored: `subgroupBarrier()` plus an output buffer declared `subgroupcoherent`. On
   AMD this adds no instructions.
+- LLPC keeps a conditionally assigned local in registers through every loop. Initialise locals where declared.
 - Same-wave loops compiled from a register rotation wait for the load at the loop end. A prefetch has to go
   through shared memory, written in the same iteration that loaded it.
 
 ## Shared memory and registers
 
-3072 bytes, 96 vector registers on RDNA2 (191 on the RX 9070 XT's compiler). On RDNA2 both allow 10 waves per SIMD.
+3072 bytes: 10 waves per SIMD. 70 vector registers on RDNA2, 94 on the RX 9070 XT.
 
 | what | bytes |
 |---|---|

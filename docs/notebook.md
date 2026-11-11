@@ -5,6 +5,23 @@ RX 9070 XT. Kernel time in ms
 on the GPU, best of several rounds, unless a row says otherwise. The machine was shared, so times move by 10 %
 between sessions; comparisons inside one table were run interleaved.
 
+## Third pass
+
+`words[7]` and `pat_t q` initialised where declared: LLPC carried them through every loop.
+
+| | before | after |
+|---|---|---|
+| vector registers, RX 6650 XT | 93 | 70 |
+| vector registers, RX 9070 XT | 190 | 94 |
+| kernel time, RX 6650 XT | | -4 to +1 % |
+| kernel time, RX 9070 XT | | -4 to +5 %, median +1 % |
+
+| tried | result | kept |
+|---|---|---|
+| long-code limits in shared memory | 64 and 79 registers, +1 to +4 % | no |
+| 8-bit literal root | up to +41 % | no |
+| output ring 256 bytes | up to +12 % | no |
+
 ## Second pass
 
 Each change against the previous kept one, separate builds, `bench` interleaved, three rounds.

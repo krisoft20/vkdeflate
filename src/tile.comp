@@ -493,7 +493,7 @@ void copy_own(uint dst, uint cp, uint cl, uint cd, uint longest) {
     uint src = cl != 0u ? dst + cp - cd : dst;
     uint last = (src + max(cl, 1u) - 1u) >> 2;
     uint shift = (src & 3u) * 8u;
-    uint words[7];
+    uint words[7] = uint[7](0u, 0u, 0u, 0u, 0u, 0u, 0u);
     [[unroll]] for (uint i = 0; i < 7; i++) {
         if (i * 4u < longest + 4u)
             words[i] = out_word(min((src >> 2) + i, last));
@@ -535,7 +535,7 @@ void copy_own_ovr(uint dst, uint cp, uint cl, uint cd, uint longest, uint lim) {
     uint src = dst + cp - cd;
     uint last = (src + cl - 1u) >> 2;
     uint shift = (src & 3u) * 8u;
-    uint words[7];
+    uint words[7] = uint[7](0u, 0u, 0u, 0u, 0u, 0u, 0u);
     [[unroll]] for (uint i = 0; i < 7; i++) {
         if (i * 4u < longest + 4u)
             words[i] = out_word(min((src >> 2) + i, last));
@@ -860,8 +860,7 @@ uint huffman_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout 
             }
             if (longest != 0u)
                 copy_own(dst, mpos, shortm ? mlen : 0u, val, longest);
-            pat_t q;
-            q.valid = false;
+            pat_t q = pat_t(false, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
             uint lmask = subgroupBallot(is_dist && !dep && mlen > 24u).x;
             uint pmask = subgroupBallot(is_dist && !dep && mlen > 24u && mlen <= 4u * LANES && val >= mlen).x;
             while (bitCount(pmask) >= 2u) {
