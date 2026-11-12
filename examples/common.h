@@ -16,7 +16,6 @@
 #include <dlfcn.h>
 #endif
 
-#include "gdeflate.h"
 #include "vkdeflate.h"
 
 #define EX_FNS(X)                               \

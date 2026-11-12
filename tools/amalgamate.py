@@ -35,10 +35,12 @@ HEAD = """// vkdeflate.h - GDeflate 1.0 decoder for Vulkan compute, with a CPU r
 //     gdeflate::compress(data, n, stream, err)                            encoder, CPU
 //     gdeflate::decompress(stream, n, out, size, err)                     CPU, any machine
 //     vkdeflate::describe(stream, header_bytes, n, tiles, out_size, err)  stream header -> tile table
+//     vkdeflate::device_features(instance, phys, vkGetInstanceProcAddr, need, err)   what to enable on the device
 //     vkdeflate::attach(instance, phys, device, vkGetInstanceProcAddr, {}, err)
 //     vkdeflate::record(ctx, cmd, {src, tiles, dst, status, count, flags}) one dispatch in your command buffer
 //     vkdeflate::cmd_decompress_memory(ctx, cmd, &info)                   VK_EXT_memory_decompression regions
 //     vkdeflate::load(ctx, queue, family, items, count, err)              files into your buffers and images
+//     vkdeflate::record_load(ctx, cmd, items, count, err)                 the same in your command buffer
 //     vkdeflate::create({}, err) / vkdeflate::decompress(ctx, ...)        standalone: own device, host memory
 //
 // From C: vkdeflate_c.h next to this file declares the same calls as plain functions.
@@ -107,7 +109,7 @@ def main():
     a = ap.parse_args()
     pre = os.path.join(ROOT, 'prebuilt', 'tile_spv.inc')
 
-    decl = drop(body(read('src/gdeflate.h')), '#pragma once') + '\n' + drop(body(read('src/vkdeflate.h')), '#pragma once')
+    decl = drop(body(read('src/gdeflate.h')), '#pragma once') + '\n' + drop(body(read('src/vkdeflate.h')), '#pragma once', '#include "gdeflate.h"')
     cpu = drop(body(read('src/gdeflate.cpp')), '#include "gdeflate.h"')
     gpu = drop(body(read('src/vkdeflate.cpp')), '#define _CRT_SECURE_NO_WARNINGS', '#define VK_NO_PROTOTYPES',
                '#include "gdeflate.h"', '#include "vkdeflate.h"')

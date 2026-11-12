@@ -57,6 +57,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include "gdeflate.h"
+
 namespace vkdeflate {
     struct config_t {
         uint32_t subgroup_size = 0;
@@ -68,6 +70,15 @@ namespace vkdeflate {
         uint32_t runs_pad_bytes = 4608;
         bool capture_stats = false;
         bool verbose = false;
+        VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
+        const VkDeviceCreateInfo* created_with = nullptr;
+    };
+
+    struct features_t {
+        VkPhysicalDeviceFeatures2 base;
+        VkPhysicalDeviceVulkan12Features v12;
+        VkPhysicalDeviceSubgroupSizeControlFeatures size_control;
+        const char* extension;
     };
 
     struct timing_t {
@@ -117,10 +128,14 @@ namespace vkdeflate {
         VkImageSubresourceLayers layers = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         VkExtent3D extent = {};
         VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        const VkBufferImageCopy* regions = nullptr;
+        uint32_t region_count = 0;
     };
 
     struct ctx_t;
 
+    bool device_features(VkInstance instance, VkPhysicalDevice phys, PFN_vkGetInstanceProcAddr gipa, features_t& out,
+                         std::string& err);
     ctx_t* create(const config_t& cfg, std::string& err);
     ctx_t* attach(VkInstance instance, VkPhysicalDevice phys, VkDevice dev, PFN_vkGetInstanceProcAddr gipa,
                   const config_t& cfg, std::string& err);
@@ -151,6 +166,9 @@ namespace vkdeflate {
 #endif
 
     bool load(ctx_t* ctx, VkQueue queue, uint32_t queue_family, const load_t* items, uint32_t count, std::string& err);
+    bool record_load(ctx_t* ctx, VkCommandBuffer cmd, const load_t* items, uint32_t count, std::string& err);
+    bool load_result(ctx_t* ctx, std::string& err);
+    void trim(ctx_t* ctx);
 
     bool decompress(ctx_t* ctx, const uint8_t* in, size_t n, uint8_t* out, size_t size, std::string& err,
                     timing_t* timing = nullptr);

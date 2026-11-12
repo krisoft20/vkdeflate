@@ -144,8 +144,14 @@ int vkdeflate_load(vkdeflate_ctx* ctx, VkQueue queue, uint32_t queue_family, con
         to.extent = items[i].extent;
         if (items[i].layout != VK_IMAGE_LAYOUT_UNDEFINED)
             to.layout = items[i].layout;
+        to.regions = items[i].regions;
+        to.region_count = items[i].region_count;
     }
     return vkdeflate::load((vkdeflate::ctx_t*)ctx, queue, queue_family, list.data(), count, vkdeflate_c_error) ? 1 : 0;
+}
+
+void vkdeflate_trim(vkdeflate_ctx* ctx) {
+    vkdeflate::trim((vkdeflate::ctx_t*)ctx);
 }
 
 int vkdeflate_decompress(vkdeflate_ctx* ctx, const uint8_t* stream, size_t size, uint8_t* out, size_t out_size) {

@@ -56,12 +56,14 @@ jobs:
               cp bench.cmd $P/
               cp tools/busy.cmd tools/vsenv.cmd $P/tools/
               cp build/bench.exe build/gdz.exe $P/build/
+              cp build/gdz.exe gdz-windows.exe
               cp third_party_build/gdref/build/gdref.exe $P/third_party_build/gdref/build/
               RUN='bench.cmd'
           else
               cp bench.sh $P/
               cp tools/busy.sh $P/tools/
               cp build/bench build/gdz $P/build/
+              cp build/gdz gdz-linux
               cp third_party_build/gdref/build/gdref $P/third_party_build/gdref/build/
               RUN='./bench.sh'
           fi
@@ -88,6 +90,7 @@ jobs:
           path: |
             vkdeflate-bench-*.zip
             vkdeflate-bench-*.tar.gz
+            gdz-*
 
   release:
     needs: package
@@ -113,4 +116,4 @@ jobs:
           fi
           cat notes.txt
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.txt
-          gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz single_include/vkdeflate.h single_include/vkdeflate_c.h --clobber
+          gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz dist/gdz-* single_include/vkdeflate.h single_include/vkdeflate_c.h --clobber

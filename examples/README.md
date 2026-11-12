@@ -9,7 +9,7 @@ Each one decodes on the GPU and compares the result with the CPU decoder. `.\bui
 | [`batch.cpp`](batch.cpp) | `attach()`, `describe()`, `record()` | your device and buffers, several streams in one command buffer |
 | [`regions.cpp`](regions.cpp) | `cmd_decompress_memory()` | the `vkCmdDecompressMemoryEXT` call shape: an array of regions in host memory, one raw tile each |
 | [`indirect.cpp`](indirect.cpp) | `record_regions_indirect()` | regions in GPU memory and their count written on the GPU, as `vkCmdDecompressMemoryIndirectCountEXT` |
-| [`load.cpp`](load.cpp) | `load()` | a file on disk into a buffer and into an image, one call |
+| [`load.cpp`](load.cpp) | `load()`, `record_load()`, `device_features()` | a file into a buffer and into an image with two mip levels; the same in your own command buffer |
 
     build\example_decompress.exe test\vectors\dickens.l6.gdz
     build\example_batch.exe a.gdz b.gdz c.gdz

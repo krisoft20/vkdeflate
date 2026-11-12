@@ -14,10 +14,12 @@
 //     gdeflate::compress(data, n, stream, err)                            encoder, CPU
 //     gdeflate::decompress(stream, n, out, size, err)                     CPU, any machine
 //     vkdeflate::describe(stream, header_bytes, n, tiles, out_size, err)  stream header -> tile table
+//     vkdeflate::device_features(instance, phys, vkGetInstanceProcAddr, need, err)   what to enable on the device
 //     vkdeflate::attach(instance, phys, device, vkGetInstanceProcAddr, {}, err)
 //     vkdeflate::record(ctx, cmd, {src, tiles, dst, status, count, flags}) one dispatch in your command buffer
 //     vkdeflate::cmd_decompress_memory(ctx, cmd, &info)                   VK_EXT_memory_decompression regions
 //     vkdeflate::load(ctx, queue, family, items, count, err)              files into your buffers and images
+//     vkdeflate::record_load(ctx, cmd, items, count, err)                 the same in your command buffer
 //     vkdeflate::create({}, err) / vkdeflate::decompress(ctx, ...)        standalone: own device, host memory
 //
 // From C: vkdeflate_c.h next to this file declares the same calls as plain functions.
@@ -115,6 +117,7 @@ namespace gdeflate {
 
 #include <vulkan/vulkan.h>
 
+
 namespace vkdeflate {
     struct config_t {
         uint32_t subgroup_size = 0;
@@ -126,6 +129,15 @@ namespace vkdeflate {
         uint32_t runs_pad_bytes = 4608;
         bool capture_stats = false;
         bool verbose = false;
+        VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
+        const VkDeviceCreateInfo* created_with = nullptr;
+    };
+
+    struct features_t {
+        VkPhysicalDeviceFeatures2 base;
+        VkPhysicalDeviceVulkan12Features v12;
+        VkPhysicalDeviceSubgroupSizeControlFeatures size_control;
+        const char* extension;
     };
 
     struct timing_t {
@@ -175,10 +187,14 @@ namespace vkdeflate {
         VkImageSubresourceLayers layers = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         VkExtent3D extent = {};
         VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        const VkBufferImageCopy* regions = nullptr;
+        uint32_t region_count = 0;
     };
 
     struct ctx_t;
 
+    bool device_features(VkInstance instance, VkPhysicalDevice phys, PFN_vkGetInstanceProcAddr gipa, features_t& out,
+                         std::string& err);
     ctx_t* create(const config_t& cfg, std::string& err);
     ctx_t* attach(VkInstance instance, VkPhysicalDevice phys, VkDevice dev, PFN_vkGetInstanceProcAddr gipa,
                   const config_t& cfg, std::string& err);
@@ -209,6 +225,9 @@ namespace vkdeflate {
 #endif
 
     bool load(ctx_t* ctx, VkQueue queue, uint32_t queue_family, const load_t* items, uint32_t count, std::string& err);
+    bool record_load(ctx_t* ctx, VkCommandBuffer cmd, const load_t* items, uint32_t count, std::string& err);
+    bool load_result(ctx_t* ctx, std::string& err);
+    void trim(ctx_t* ctx);
 
     bool decompress(ctx_t* ctx, const uint8_t* in, size_t n, uint8_t* out, size_t size, std::string& err,
                     timing_t* timing = nullptr);
@@ -14920,6 +14939,8 @@ struct ctx_t {
     VkCommandBuffer load_cmd = VK_NULL_HANDLE;
     VkFence load_fence = VK_NULL_HANDLE;
     uint32_t load_family = UINT32_MAX;
+    std::vector<std::pair<uint32_t, uint32_t>> load_owners;
+    VkPipelineCache cache = VK_NULL_HANDLE;
     VkDeviceSize regions_at = 0;
     std::string err;
 };
@@ -15229,12 +15250,12 @@ static bool make_pipeline(ctx_t& g) {
     cpci.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, g.control ? &rss : nullptr, full,
                   VK_SHADER_STAGE_COMPUTE_BIT, g.shader, "main", &spec};
     cpci.layout = g.layout;
-    if ((r = g.f.vkCreateComputePipelines(g.dev, VK_NULL_HANDLE, 1, &cpci, nullptr, &g.pipeline)) != VK_SUCCESS)
+    if ((r = g.f.vkCreateComputePipelines(g.dev, g.cache, 1, &cpci, nullptr, &g.pipeline)) != VK_SUCCESS)
         return fail(g, "vkCreateComputePipelines", r);
     if (g.runs_pad) {
         spec_data[3] = g.pad + g.runs_pad;
         cpci.flags = 0;
-        if ((r = g.f.vkCreateComputePipelines(g.dev, VK_NULL_HANDLE, 1, &cpci, nullptr, &g.pipeline_runs)) != VK_SUCCESS)
+        if ((r = g.f.vkCreateComputePipelines(g.dev, g.cache, 1, &cpci, nullptr, &g.pipeline_runs)) != VK_SUCCESS)
             return fail(g, "vkCreateComputePipelines", r);
     }
     make_report(g);
@@ -15338,6 +15359,81 @@ const char* tile_error(uint32_t code) {
     }
 }
 
+static const VkBaseInStructure* find_struct(const void* chain, VkStructureType type) {
+    for (const VkBaseInStructure* s = (const VkBaseInStructure*)chain; s; s = s->pNext)
+        if (s->sType == type)
+            return s;
+    return nullptr;
+}
+
+static bool enabled_on(ctx_t& g, const VkDeviceCreateInfo* info) {
+    const VkPhysicalDeviceFeatures2* f2 = (const VkPhysicalDeviceFeatures2*)find_struct(info->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
+    const VkPhysicalDeviceVulkan12Features* f12 = (const VkPhysicalDeviceVulkan12Features*)find_struct(info->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
+    const VkPhysicalDeviceVulkan13Features* f13 = (const VkPhysicalDeviceVulkan13Features*)find_struct(info->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES);
+    const VkPhysicalDevice8BitStorageFeatures* s8 = (const VkPhysicalDevice8BitStorageFeatures*)find_struct(info->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES);
+    const VkPhysicalDeviceShaderFloat16Int8Features* i8 = (const VkPhysicalDeviceShaderFloat16Int8Features*)find_struct(info->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES);
+    const VkPhysicalDeviceBufferDeviceAddressFeatures* bda = (const VkPhysicalDeviceBufferDeviceAddressFeatures*)find_struct(info->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES);
+    const VkPhysicalDeviceVulkanMemoryModelFeatures* vmm = (const VkPhysicalDeviceVulkanMemoryModelFeatures*)find_struct(info->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES);
+    const VkPhysicalDeviceSubgroupSizeControlFeatures* sc = (const VkPhysicalDeviceSubgroupSizeControlFeatures*)find_struct(info->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES);
+    const VkPhysicalDeviceFeatures* f10 = info->pEnabledFeatures ? info->pEnabledFeatures : f2 ? &f2->features : nullptr;
+    std::string missing;
+    auto need = [&](bool on, const char* name) {
+        if (!on)
+            missing += std::string(missing.empty() ? "" : ", ") + name;
+    };
+    need(f10 && f10->shaderInt64, "shaderInt64");
+    need(f12 ? f12->shaderInt8 : i8 && i8->shaderInt8, "shaderInt8");
+    need(f12 ? f12->storageBuffer8BitAccess : s8 && s8->storageBuffer8BitAccess, "storageBuffer8BitAccess");
+    need(f12 ? f12->bufferDeviceAddress : bda && bda->bufferDeviceAddress, "bufferDeviceAddress");
+    need(f12 ? f12->vulkanMemoryModel : vmm && vmm->vulkanMemoryModel, "vulkanMemoryModel");
+    if (g.control) {
+        need(f13 ? f13->subgroupSizeControl : sc && sc->subgroupSizeControl, "subgroupSizeControl");
+        need(f13 ? f13->computeFullSubgroups : sc && sc->computeFullSubgroups, "computeFullSubgroups");
+    }
+    if (g.control_ext) {
+        bool named = false;
+        for (uint32_t i = 0; i < info->enabledExtensionCount; i++)
+            named = named || !strcmp(info->ppEnabledExtensionNames[i], subgroup_ext);
+        need(named, subgroup_ext);
+    }
+    if (missing.empty())
+        return true;
+    g.err = "the device was created without " + missing + "; vkdeflate::device_features() lists what to enable";
+    return false;
+}
+
+bool device_features(VkInstance instance, VkPhysicalDevice phys, PFN_vkGetInstanceProcAddr gipa, features_t& out, std::string& err) {
+    ctx_t g;
+    g.phys = phys;
+#define LOAD_INSTANCE_FEATURES(fn) g.f.fn = (PFN_##fn)gipa(instance, #fn);
+    VK_FN_INSTANCE(LOAD_INSTANCE_FEATURES)
+    if (!g.f.vkGetPhysicalDeviceProperties2 || !g.f.vkGetPhysicalDeviceFeatures2) {
+        err = "vkGetInstanceProcAddr did not give the instance functions";
+        return false;
+    }
+    if (!pick_subgroup(g, config_t{})) {
+        err = g.err;
+        return false;
+    }
+    out = features_t{};
+    out.base.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    out.base.features.shaderInt64 = VK_TRUE;
+    out.base.pNext = &out.v12;
+    out.v12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    out.v12.shaderInt8 = VK_TRUE;
+    out.v12.storageBuffer8BitAccess = VK_TRUE;
+    out.v12.bufferDeviceAddress = VK_TRUE;
+    out.v12.vulkanMemoryModel = VK_TRUE;
+    out.size_control.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES;
+    if (g.control) {
+        out.size_control.subgroupSizeControl = VK_TRUE;
+        out.size_control.computeFullSubgroups = VK_TRUE;
+        out.v12.pNext = &out.size_control;
+    }
+    out.extension = g.control_ext ? subgroup_ext : nullptr;
+    return true;
+}
+
 ctx_t* create(const config_t& cfg, std::string& err) {
     ctx_t* g = new ctx_t;
     g->verbose = cfg.verbose;
@@ -15368,6 +15464,7 @@ ctx_t* attach(VkInstance instance, VkPhysicalDevice phys, VkDevice dev, PFN_vkGe
     g->instance = instance;
     g->phys = phys;
     g->dev = dev;
+    g->cache = cfg.pipeline_cache;
 #define LOAD_INSTANCE_EXT(fn) g->f.fn = (PFN_##fn)gipa(instance, #fn);
     VK_FN_INSTANCE(LOAD_INSTANCE_EXT)
     if (!g->f.vkGetDeviceProcAddr || !g->f.vkGetPhysicalDeviceProperties2 || !g->f.vkGetPhysicalDeviceFeatures2) {
@@ -15383,7 +15480,7 @@ ctx_t* attach(VkInstance instance, VkPhysicalDevice phys, VkDevice dev, PFN_vkGe
         g->stats = g->f.vkGetPipelineExecutablePropertiesKHR && g->f.vkGetPipelineExecutableStatisticsKHR &&
                    g->f.vkGetPipelineExecutableInternalRepresentationsKHR;
     }
-    if (!pick_subgroup(*g, cfg) || !make_pipeline(*g)) {
+    if (!pick_subgroup(*g, cfg) || (cfg.created_with && !enabled_on(*g, cfg.created_with)) || !make_pipeline(*g)) {
         err = g->err;
         destroy(g);
         return nullptr;
@@ -15574,7 +15671,7 @@ static bool read_range(const load_t& item, std::vector<uint8_t>& bytes, std::str
     return true;
 }
 
-bool load(ctx_t* g, VkQueue queue, uint32_t queue_family, const load_t* items, uint32_t count, std::string& err) {
+bool record_load(ctx_t* g, VkCommandBuffer cmd, const load_t* items, uint32_t count, std::string& err) {
     struct owner_t {
         tile_desc_t tile;
         uint32_t item;
@@ -15584,12 +15681,9 @@ bool load(ctx_t* g, VkQueue queue, uint32_t queue_family, const load_t* items, u
         VkDeviceSize out;
         size_t size;
     };
+    g->load_owners.clear();
     if (!count)
         return true;
-    if (g->owns_device && !queue) {
-        queue = g->queue;
-        queue_family = g->family;
-    }
     if (!g->f.vkQueueSubmit) {
 #define LOAD_DEVICE_LATE(fn) g->f.fn = (PFN_##fn)g->f.vkGetDeviceProcAddr(g->dev, #fn);
         VK_FN_DEVICE(LOAD_DEVICE_LATE)
@@ -15651,7 +15745,6 @@ bool load(ctx_t* g, VkQueue queue, uint32_t queue_family, const load_t* items, u
     VkDeviceSize tiles_size = tiles.size() * sizeof(tile_desc_t);
     VkDeviceSize status_size = tiles.size() * 4;
     VkDeviceSize up_tiles = align_up(in_size, 256);
-    VkResult r = VK_SUCCESS;
     if (!make_buf(*g, g->in, in_size, storage | xfer_dst, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
         !make_buf(*g, g->tiles, tiles_size, storage | xfer_dst, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
         !make_buf(*g, g->out, out_size, storage | xfer_src, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
@@ -15660,28 +15753,6 @@ bool load(ctx_t* g, VkQueue queue, uint32_t queue_family, const load_t* items, u
         !make_buf(*g, g->down, status_size, xfer_dst, visible | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, local)) {
         err = g->err;
         return false;
-    }
-    if (g->load_family != queue_family) {
-        if (g->load_pool)
-            g->f.vkDestroyCommandPool(g->dev, g->load_pool, nullptr);
-        g->load_pool = VK_NULL_HANDLE;
-        VkCommandPoolCreateInfo pci = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
-        pci.queueFamilyIndex = queue_family;
-        VkCommandBufferAllocateInfo cai = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-        cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        cai.commandBufferCount = 1;
-        if ((r = g->f.vkCreateCommandPool(g->dev, &pci, nullptr, &g->load_pool)) == VK_SUCCESS) {
-            cai.commandPool = g->load_pool;
-            r = g->f.vkAllocateCommandBuffers(g->dev, &cai, &g->load_cmd);
-        }
-        VkFenceCreateInfo fci = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
-        if (r == VK_SUCCESS && !g->load_fence)
-            r = g->f.vkCreateFence(g->dev, &fci, nullptr, &g->load_fence);
-        if (r != VK_SUCCESS) {
-            err = "load: command pool or fence failed: " + std::to_string((int)r);
-            return false;
-        }
-        g->load_family = queue_family;
     }
 
     uint8_t* up = (uint8_t*)g->up.map;
@@ -15695,11 +15766,6 @@ bool load(ctx_t* g, VkQueue queue, uint32_t queue_family, const load_t* items, u
     }
     memcpy(up + up_tiles, tiles.data(), (size_t)tiles_size);
 
-    g->f.vkResetCommandPool(g->dev, g->load_pool, 0);
-    VkCommandBufferBeginInfo bi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    VkCommandBuffer cmd = g->load_cmd;
-    g->f.vkBeginCommandBuffer(cmd, &bi);
     VkBufferCopy c_in = {0, 0, in_size};
     VkBufferCopy c_tiles = {up_tiles, 0, tiles_size};
     g->f.vkCmdCopyBuffer(cmd, g->up.buf, g->in.buf, 1, &c_in);
@@ -15727,13 +15793,22 @@ bool load(ctx_t* g, VkQueue queue, uint32_t queue_family, const load_t* items, u
         ib.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         ib.image = item.image;
         ib.subresourceRange = {item.layers.aspectMask, item.layers.mipLevel, 1, item.layers.baseArrayLayer, item.layers.layerCount};
+        if (item.region_count)
+            ib.subresourceRange = {item.regions[0].imageSubresource.aspectMask, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
         g->f.vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
                                   nullptr, 1, &ib);
-        VkBufferImageCopy c = {};
-        c.bufferOffset = spans[i].out;
-        c.imageSubresource = item.layers;
-        c.imageExtent = item.extent;
-        g->f.vkCmdCopyBufferToImage(cmd, g->out.buf, item.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &c);
+        std::vector<VkBufferImageCopy> copies(item.regions, item.regions + item.region_count);
+        for (VkBufferImageCopy& c : copies)
+            c.bufferOffset += spans[i].out;
+        if (copies.empty()) {
+            VkBufferImageCopy c = {};
+            c.bufferOffset = spans[i].out;
+            c.imageSubresource = item.layers;
+            c.imageExtent = item.extent;
+            copies.push_back(c);
+        }
+        g->f.vkCmdCopyBufferToImage(cmd, g->out.buf, item.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (uint32_t)copies.size(),
+                                    copies.data());
         ib.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         ib.dstAccessMask = 0;
         ib.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -15745,8 +15820,64 @@ bool load(ctx_t* g, VkQueue queue, uint32_t queue_family, const load_t* items, u
     g->f.vkCmdCopyBuffer(cmd, g->status.buf, g->down.buf, 1, &c_status);
     barrier(*g, cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
             VK_ACCESS_HOST_READ_BIT);
-    g->f.vkEndCommandBuffer(cmd);
+    for (const owner_t& o : owners)
+        g->load_owners.push_back({o.item, o.index});
+    return true;
+}
 
+bool load_result(ctx_t* g, std::string& err) {
+    const uint32_t* status = (const uint32_t*)g->down.map;
+    for (size_t i = 0; i < g->load_owners.size(); i++)
+        if (status[i]) {
+            err = "item " + std::to_string(g->load_owners[i].first) + ", tile " + std::to_string(g->load_owners[i].second) + ": " +
+                  tile_error(status[i]);
+            return false;
+        }
+    return true;
+}
+
+bool load(ctx_t* g, VkQueue queue, uint32_t queue_family, const load_t* items, uint32_t count, std::string& err) {
+    if (!count)
+        return true;
+    if (g->owns_device && !queue) {
+        queue = g->queue;
+        queue_family = g->family;
+    }
+    if (!g->f.vkQueueSubmit) {
+#define LOAD_DEVICE_FIRST(fn) g->f.fn = (PFN_##fn)g->f.vkGetDeviceProcAddr(g->dev, #fn);
+        VK_FN_DEVICE(LOAD_DEVICE_FIRST)
+    }
+    VkResult r = VK_SUCCESS;
+    if (g->load_family != queue_family) {
+        if (g->load_pool)
+            g->f.vkDestroyCommandPool(g->dev, g->load_pool, nullptr);
+        g->load_pool = VK_NULL_HANDLE;
+        VkCommandPoolCreateInfo pci = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+        pci.queueFamilyIndex = queue_family;
+        VkCommandBufferAllocateInfo cai = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+        cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cai.commandBufferCount = 1;
+        if ((r = g->f.vkCreateCommandPool(g->dev, &pci, nullptr, &g->load_pool)) == VK_SUCCESS) {
+            cai.commandPool = g->load_pool;
+            r = g->f.vkAllocateCommandBuffers(g->dev, &cai, &g->load_cmd);
+        }
+        VkFenceCreateInfo fci = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+        if (r == VK_SUCCESS && !g->load_fence)
+            r = g->f.vkCreateFence(g->dev, &fci, nullptr, &g->load_fence);
+        if (r != VK_SUCCESS) {
+            err = "load: command pool or fence failed: " + std::to_string((int)r);
+            return false;
+        }
+        g->load_family = queue_family;
+    }
+    g->f.vkResetCommandPool(g->dev, g->load_pool, 0);
+    VkCommandBufferBeginInfo bi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VkCommandBuffer cmd = g->load_cmd;
+    g->f.vkBeginCommandBuffer(cmd, &bi);
+    if (!record_load(g, cmd, items, count, err))
+        return false;
+    g->f.vkEndCommandBuffer(cmd);
     VkSubmitInfo si = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
     si.commandBufferCount = 1;
     si.pCommandBuffers = &cmd;
@@ -15760,14 +15891,17 @@ bool load(ctx_t* g, VkQueue queue, uint32_t queue_family, const load_t* items, u
         err = "vkWaitForFences failed: " + std::to_string((int)r);
         return false;
     }
-    const uint32_t* status = (const uint32_t*)g->down.map;
-    for (size_t i = 0; i < owners.size(); i++)
-        if (status[i]) {
-            err = "item " + std::to_string(owners[i].item) + ", tile " + std::to_string(owners[i].index) + ": " +
-                  tile_error(status[i]);
-            return false;
-        }
-    return true;
+    return load_result(g, err);
+}
+
+void trim(ctx_t* g) {
+    free_buf(*g, g->in);
+    free_buf(*g, g->tiles);
+    free_buf(*g, g->out);
+    free_buf(*g, g->status);
+    free_buf(*g, g->up);
+    free_buf(*g, g->down);
+    g->load_owners.clear();
 }
 
 bool decompress(ctx_t* g, const uint8_t* in, size_t n, uint8_t* out, size_t size, std::string& err, timing_t* timing) {
@@ -15935,6 +16069,8 @@ typedef struct vkdeflate_load_item {
     uint32_t array_layer;
     VkExtent3D extent;
     VkImageLayout layout;
+    const VkBufferImageCopy* regions;
+    uint32_t region_count;
 } vkdeflate_load_item;
 
 const char* vkdeflate_last_error(void);
@@ -15958,6 +16094,7 @@ int vkdeflate_cmd_decompress_memory(vkdeflate_ctx* ctx, VkCommandBuffer cmd, con
 void vkdeflate_record_regions_indirect(vkdeflate_ctx* ctx, VkCommandBuffer cmd, VkDeviceAddress regions, VkDeviceAddress count,
                                        uint32_t max_count, uint32_t stride, VkDeviceAddress status, uint32_t flags);
 int vkdeflate_load(vkdeflate_ctx* ctx, VkQueue queue, uint32_t queue_family, const vkdeflate_load_item* items, uint32_t count);
+void vkdeflate_trim(vkdeflate_ctx* ctx);
 int vkdeflate_decompress(vkdeflate_ctx* ctx, const uint8_t* stream, size_t size, uint8_t* out, size_t out_size);
 
 #ifdef __cplusplus
@@ -16085,8 +16222,14 @@ int vkdeflate_load(vkdeflate_ctx* ctx, VkQueue queue, uint32_t queue_family, con
         to.extent = items[i].extent;
         if (items[i].layout != VK_IMAGE_LAYOUT_UNDEFINED)
             to.layout = items[i].layout;
+        to.regions = items[i].regions;
+        to.region_count = items[i].region_count;
     }
     return vkdeflate::load((vkdeflate::ctx_t*)ctx, queue, queue_family, list.data(), count, vkdeflate_c_error) ? 1 : 0;
+}
+
+void vkdeflate_trim(vkdeflate_ctx* ctx) {
+    vkdeflate::trim((vkdeflate::ctx_t*)ctx);
 }
 
 int vkdeflate_decompress(vkdeflate_ctx* ctx, const uint8_t* stream, size_t size, uint8_t* out, size_t out_size) {
@@ -16104,9 +16247,11 @@ int vkdeflate_decompress(vkdeflate_ctx* ctx, const uint8_t* stream, size_t size,
 #undef LOAD_GLOBAL
 #undef LOAD_INSTANCE
 #undef LOAD_DEVICE
+#undef LOAD_INSTANCE_FEATURES
 #undef LOAD_INSTANCE_EXT
 #undef LOAD_DEVICE_EXT
 #undef LOAD_DEVICE_LATE
+#undef LOAD_DEVICE_FIRST
 
 #if defined(_MSC_VER)
 #pragma warning(pop)

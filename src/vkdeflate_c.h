@@ -75,6 +75,8 @@ typedef struct vkdeflate_load_item {
     uint32_t array_layer;
     VkExtent3D extent;
     VkImageLayout layout;
+    const VkBufferImageCopy* regions;
+    uint32_t region_count;
 } vkdeflate_load_item;
 
 const char* vkdeflate_last_error(void);
@@ -98,6 +100,7 @@ int vkdeflate_cmd_decompress_memory(vkdeflate_ctx* ctx, VkCommandBuffer cmd, con
 void vkdeflate_record_regions_indirect(vkdeflate_ctx* ctx, VkCommandBuffer cmd, VkDeviceAddress regions, VkDeviceAddress count,
                                        uint32_t max_count, uint32_t stride, VkDeviceAddress status, uint32_t flags);
 int vkdeflate_load(vkdeflate_ctx* ctx, VkQueue queue, uint32_t queue_family, const vkdeflate_load_item* items, uint32_t count);
+void vkdeflate_trim(vkdeflate_ctx* ctx);
 int vkdeflate_decompress(vkdeflate_ctx* ctx, const uint8_t* stream, size_t size, uint8_t* out, size_t out_size);
 
 #ifdef __cplusplus

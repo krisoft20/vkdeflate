@@ -61,24 +61,50 @@ With vcpkg: `vcpkg install vkdeflate --overlay-ports=<repo>/ports`.
 | to make `.gdz` streams | `gdz -c`, or `gdeflate::compress()` |
 | C, or bindings for another language | [`vkdeflate_c.h`](single_include/vkdeflate_c.h) |
 
-The shortest example:
+A `.gdz` file is a bare GDeflate stream, the bytes `gdeflate::compress()` returns. There is no container.
+
+**1. Create your device with the features the kernel needs.** Vulkan has no query for the features a device was
+created with, so pass the `VkDeviceCreateInfo` to `attach()`: a missing feature then fails the call with its name
+in `err`, not later inside the driver.
 
 ```cpp
 #define VKDEFLATE_IMPLEMENTATION          // in one .cpp
 #include "vkdeflate.h"
 
 std::string err;
-vkdeflate::ctx_t* ctx = vkdeflate::attach(instance, phys, device, vkGetInstanceProcAddr, {}, err);   // once
+vkdeflate::features_t need;               // returns false when the card lacks a feature
+vkdeflate::device_features(instance, phys, vkGetInstanceProcAddr, need, err);
+device_info.pNext = &need.base;           // or copy its bits into your own feature structs
+// if need.extension is not null, add it to the device's extension list
+vkCreateDevice(phys, &device_info, nullptr, &device);
+```
+
+**2. Attach once, then load.**
+
+```cpp
+vkdeflate::config_t cfg;
+cfg.created_with = &device_info;          // optional: step 1 is checked at attach
+cfg.pipeline_cache = cache;               // optional: the first attach compiles the shader, 1.5 s on an RX 6650 XT
+vkdeflate::ctx_t* ctx = vkdeflate::attach(instance, phys, device, vkGetInstanceProcAddr, cfg, err);
 
 vkdeflate::load_t item;
-item.path = "rock_albedo.gdz";
-item.image = image;                 // or item.buffer
+item.path = "rock_albedo.gdz";            // or item.data and item.size for bytes from your own archive
+item.image = image;                       // or item.buffer
 item.extent = {2048, 2048, 1};
 vkdeflate::load(ctx, queue, queue_family, &item, 1, err);
 ```
 
-`load()` opens the file, decodes it on the GPU, copies the result into your buffer or image and returns when it
-is done. Several items share one dispatch.
+`load()` decodes on the GPU, copies the result into your buffer or image, submits to the queue you pass and
+returns when the GPU is done. Several items share one dispatch.
+
+- An image gets one subresource by default and ends in `item.layout` (`SHADER_READ_ONLY_OPTIMAL` unless you set
+  it); what was in it before is discarded. For a mip chain or array layers in one stream, set `item.regions` to
+  your `VkBufferImageCopy` list, with offsets counted from the start of the decoded data.
+- A context is for one thread at a time, and `load()` submits to the queue during the call. To stay inside your own frame, call
+  `record_load(ctx, cmd, ...)` in your command buffer and `load_result(ctx, err)` after it has run; one load in
+  flight per context.
+- The staging buffers stay allocated for the next call. `trim(ctx)` frees them.
+- Leave the other fields of `config_t` at their defaults; they are kernel tuning knobs for the benchmark.
 
 <details>
 <summary>In your own command buffer</summary>
@@ -125,6 +151,8 @@ gets `VK_EXT_memory_decompression` and `VK_NV_memory_decompression` on a driver 
 
     build\gdz.exe -c rock_albedo.bc7 -o rock_albedo.gdz        level 6; -level 1..12
 
+`gdz` is also in the benchmark package of every release, so packing needs no build.
+
 Against the reference encoder at the same level, Silesia corpus, 12 threads, both run back to back into a
 buffer allocated beforehand:
 
@@ -140,16 +168,17 @@ The output decodes with Microsoft's reference decoder.
 </details>
 
 <details>
-<summary>What the device needs</summary>
+<summary>What the device needs, by name</summary>
 
 Vulkan 1.2 with `shaderInt64`, `shaderInt8`, `storageBuffer8BitAccess`, `bufferDeviceAddress` and
 `vulkanMemoryModel`, and a subgroup of 32 lanes: native, or chosen through `subgroupSizeControl` and
-`computeFullSubgroups` (core in 1.3, `VK_EXT_subgroup_size_control` before). Enable them on the device you attach.
-The layer enables them itself. `gdeflate::decompress()` in the same header is the CPU fallback.
+`computeFullSubgroups` (core in 1.3, `VK_EXT_subgroup_size_control` before). `device_features()` sets exactly
+these. With the layer they are enabled at device creation. `gdeflate::decompress()` in the same header is the CPU fallback.
 
 </details>
 
-[`examples/`](examples/README.md) has five short programs, one per way in.
+[`examples/`](examples/README.md) has five short programs, one per way in. They include only `vkdeflate.h`, so
+they compile against the single header as they are; [`common.h`](examples/common.h) shows a complete device setup.
 
 ## Benchmark it on your card
 
