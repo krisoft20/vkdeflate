@@ -16,7 +16,7 @@ FONT = "system-ui, -apple-system, 'Segoe UI', sans-serif"
 LIGHT = """
 .bg{fill:#ffffff}.p{fill:#0b0b0b}.s{fill:#52514e}.m{fill:#898781}
 .grid{stroke:#e1e0d9;stroke-width:1}.axis{stroke:#c3c2b7;stroke-width:1}
-.c1{fill:#2a78d6}.c2{fill:#eb6834}.c3{fill:#1baf7a}.cg{fill:#898781}
+.c1{fill:#2a78d6}.c2{fill:#eb6834}.c3{fill:#1baf7a}.cg{fill:#898781}.cv{fill:#c9c8c0}
 .l1{stroke:#2a78d6}.l2{stroke:#eb6834}.l3{stroke:#1baf7a}
 .o1{fill:#86b6ef}.o2{fill:#2a78d6}.o3{fill:#104281}
 .ring{stroke:#ffffff;stroke-width:2}
@@ -26,7 +26,7 @@ LIGHT = """
 DARK = """
 .bg{fill:#0d1117}.p{fill:#f0efec}.s{fill:#c3c2b7}.m{fill:#898781}
 .grid{stroke:#2c2c2a;stroke-width:1}.axis{stroke:#383835;stroke-width:1}
-.c1{fill:#3987e5}.c2{fill:#d95926}.c3{fill:#199e70}.cg{fill:#898781}
+.c1{fill:#3987e5}.c2{fill:#d95926}.c3{fill:#199e70}.cg{fill:#898781}.cv{fill:#4a4a47}
 .l1{stroke:#3987e5}.l2{stroke:#d95926}.l3{stroke:#199e70}
 .o1{fill:#184f95}.o2{fill:#3987e5}.o3{fill:#9ec5f4}
 .ring{stroke:#0d1117;stroke-width:2}
@@ -34,6 +34,7 @@ DARK = """
 """
 
 README_GPU = 'AMD_Radeon_RX_6650_XT'
+VOLCAN = 'VolcanStorage'
 
 
 def esc(s):
@@ -123,27 +124,45 @@ def rows(rel):
         return list(csv.DictReader(f))
 
 
-def chart_pairs(data, name, title, sub, desc):
+def chart_pairs(data, name, title, sub, desc, times=False):
     data = sorted(data, key=lambda r: -r['khr'] / r['vk'])
-    left, right, top, pitch, bh = 150, 60, 84, 38, 13
-    vmax = max(max(r['khr'], r['vk']) for r in data)
+    rate = all(r.get('mb') for r in data)
+    unit = 'GB/s' if rate else 'ms'
+    val = (lambda r, k: r['mb'] / r[k]) if rate else (lambda r, k: r[k])
+    third = any(r.get('vol') for r in data)
+    left, right, top, pitch, bh = 150, 130 if rate else 60, 84, 52 if third else 38, 13
+    vmax = max(val(r, k) for r in data for k in ('vk', 'khr', 'vol') if r.get(k))
     tk = ticks(vmax)
     scale = (W - left - right) / tk[-1]
     h = top + pitch * len(data) + 34
     s = Svg(h, title, sub)
-    s.legend([('c1', 'vkdeflate'), ('cg', 'Khronos layer (NVIDIA shaders)')])
+    s.legend([('c1', 'vkdeflate'), ('cg', 'Khronos layer (NVIDIA shaders)')] + ([('cv', VOLCAN)] if third else []))
     base = top + pitch * len(data)
     for t in tk:
         x = left + t * scale
         s.line(x, top - 6, x, base, 'grid')
-        s.text(x, base + 16, num(t, 1) + ' ms', 'm', 11, 'middle')
+        s.text(x, base + 16, num(t, 1) + ' ' + unit, 'm', 11, 'middle')
     for i, r in enumerate(data):
         y = top + i * pitch
         s.text(left - 10, y + bh + 5, r['stream'], 's', 12, 'end')
-        s.bar_h(left, left + r['vk'] * scale, y, bh, 'c1', '%s, vkdeflate: %s ms' % (r['stream'], num(r['vk'])))
-        s.bar_h(left, left + r['khr'] * scale, y + bh + 2, bh, 'cg', '%s, Khronos layer: %s ms' % (r['stream'], num(r['khr'])))
-        s.text(left + max(r['khr'], r['vk']) * scale + 8, y + bh + 5, '%.1f×' % (r['khr'] / r['vk']), 'p', 12)
+        s.bar_h(left, left + val(r, 'vk') * scale, y, bh, 'c1', '%s, vkdeflate: %s %s' % (r['stream'], num(val(r, 'vk')), unit))
+        s.bar_h(left, left + val(r, 'khr') * scale, y + bh + 2, bh, 'cg', '%s, Khronos layer: %s %s' % (r['stream'], num(val(r, 'khr')), unit))
+        if r.get('vol'):
+            s.bar_h(left, left + val(r, 'vol') * scale, y + 2 * bh + 4, bh, 'cv', '%s, %s: %s %s' % (r['stream'], VOLCAN, num(val(r, 'vol')), unit))
+        if rate:
+            for j, k in enumerate(('vk', 'khr', 'vol')):
+                if r.get(k):
+                    s.text(left + val(r, k) * scale + 8, y + j * (bh + 2) + bh - 2, '%.2f ms' % r[k], 'p' if j == 0 else 'm', 11)
+            s.text(left + val(r, 'vk') * scale + 62, y + bh - 2, '%.1f×' % (r['khr'] / r['vk']), 'p', 12, weight=600)
+        elif times:
+            for j, k in enumerate(('vk', 'khr', 'vol')):
+                if r.get(k):
+                    s.text(left + r[k] * scale + 8, y + j * (bh + 2) + bh - 2, '%.2f ms' % r[k], 'p' if j == 0 else 'm', 11, weight=600 if j == 0 else 400)
+        else:
+            s.text(left + max(r['khr'], r['vk']) * scale + 8, y + bh + 5, '%.1f×' % (r['khr'] / r['vk']), 'p', 12)
     s.line(left, top - 6, left, base, 'axis')
+    if times:
+        s.text(W - 16, 30, '← shorter is faster', 'p', 15, 'end', 600)
     s.save(name, desc)
 
 
@@ -286,6 +305,57 @@ def gmean(vals):
     return math.exp(sum(math.log(v) for v in vals) / len(vals))
 
 
+def volcan_times():
+    return {(r['gpu'], r['stream']): float(r['volcan_ms']) for r in rows('docs/data/volcan.csv')}
+
+
+def card_rates():
+    vol = volcan_times()
+    out = []
+    for path in sorted(glob.glob(os.path.join(ROOT, 'results', '*.csv'))):
+        with open(path, encoding='utf-8', newline='') as f:
+            data = [r for r in csv.DictReader(f) if r.get('vkdeflate_ok') == '1']
+        if not data:
+            continue
+        mb = lambda r: float(r['out_bytes']) / 1e6
+        both = [r for r in data if r.get('khronos_ms')]
+        third = [r for r in data if (r['gpu'], r['stream']) in vol]
+        out.append((data[0]['gpu'], gmean([mb(r) / float(r['vkdeflate_ms']) for r in data]),
+                    gmean([mb(r) / float(r['khronos_ms']) for r in both]) if both else None,
+                    gmean([mb(r) / vol[(r['gpu'], r['stream'])] for r in third]) if len(third) == len(data) else None))
+    return out
+
+
+def chart_rates():
+    data = card_rates()
+    if not data:
+        return
+    series = [('c1', 'vkdeflate'), ('cg', 'Khronos layer (NVIDIA shaders)'), ('cv', VOLCAN)]
+    left, right, top, ph, bw = 56, 20, 100, 240, 64
+    tk = ticks(max(v for r in data for v in r[1:] if v))
+    sy = ph / tk[-1]
+    pitch = (W - left - right) / len(data)
+    s = Svg(top + ph + 48, 'Decode rate per card', 'GB/s of output, kernel time, geometric mean over the twelve Silesia streams; higher is better')
+    s.legend(series)
+    base = top + ph
+    for t in tk:
+        y = base - t * sy
+        s.line(left, y, W - right, y, 'grid')
+        s.text(left - 8, y + 4, num(t, 1), 'm', 11, 'end')
+    for gi, r in enumerate(data):
+        vals = [(series[i], v) for i, v in enumerate(r[1:]) if v]
+        gw = len(vals) * bw + (len(vals) - 1) * 6
+        x0 = left + gi * pitch + (pitch - gw) / 2
+        for i, ((cls, label), v) in enumerate(vals):
+            x = x0 + i * (bw + 6)
+            s.bar_v(x, bw, base, base - v * sy, cls, '%s, %s: %s GB/s' % (r[0], label, num(v, 1)))
+            s.text(x + bw / 2, base - v * sy - 6, '%.1f' % v, 'p', 12, 'middle', 600 if i == 0 else 400)
+        s.text(x0 + gw / 2, base + 18, r[0].replace('AMD Radeon ', ''), 's', 12, 'middle')
+    s.line(left, base, W - right, base, 'axis')
+    s.save('rates.svg', 'Grouped bars: decode rate in GB/s per card for ' + '; '.join(
+        '%s: vkdeflate %.1f, Khronos layer %s' % (r[0], r[1], '%.1f' % r[2] if r[2] else 'not run') for r in data) + '.')
+
+
 def cards():
     out = ['| GPU | driver | streams | vkdeflate, GB/s | Khronos layer, GB/s | vkdeflate / layer |', '|---|---|---|---|---|---|']
     for path in sorted(glob.glob(os.path.join(ROOT, 'results', '*.csv'))):
@@ -320,19 +390,22 @@ def main():
     path = os.path.join(ROOT, 'results', README_GPU + '.csv')
     if os.path.exists(path):
         with open(path, encoding='utf-8', newline='') as f:
-            data = [{'stream': r['stream'].replace('.l6', ''), 'vk': float(r['vkdeflate_ms']), 'khr': float(r['khronos_ms'])}
+            vol = volcan_times()
+            data = [{'stream': r['stream'].replace('.l6', ''), 'vk': float(r['vkdeflate_ms']), 'khr': float(r['khronos_ms']),
+                     'vol': vol.get((r['gpu'], r['stream']))}
                     for r in csv.DictReader(f) if r.get('khronos_ms')]
         if data:
             gpu = README_GPU
-            chart_pairs(data, 'khronos_%s.svg' % gpu, 'vkdeflate against the Khronos layer, Silesia corpus',
-                        'kernel ms per stream on %s, lower is better; the number is layer time over vkdeflate time' % gpu.replace('_', ' '),
-                        'Paired horizontal bars per Silesia stream: kernel time of vkdeflate and of the Khronos layer.')
+            chart_pairs(data, 'khronos_%s.svg' % gpu, 'Kernel time per Silesia stream',
+                        'milliseconds on %s' % gpu.replace('_', ' '),
+                        'Horizontal bars per Silesia stream: kernel time of vkdeflate, the Khronos layer and VolcanStorage.', times=True)
     full = [{'stream': '%s (%s)' % (r['stream'].split(' first')[0], r['tiles']), 'vk': float(r['vkdeflate_ms']), 'khr': float(r['khronos_ms'])}
             for r in rows('docs/data/khronos.csv') if int(r['tiles']) > 1]
     if full:
         chart_pairs(full, 'khronos_all.svg', 'vkdeflate against the Khronos layer, Silesia and game assets',
                     'kernel ms per stream (tiles) on an RX 6650 XT, lower is better; the number is layer time over vkdeflate time',
                     'Paired horizontal bars per stream: kernel time of vkdeflate and of the Khronos layer, fifteen streams.')
+    chart_rates()
     chart_saturation()
     chart_residency()
     chart_lds()

@@ -4,7 +4,7 @@
 <style>
 .bg{fill:#0d1117}.p{fill:#f0efec}.s{fill:#c3c2b7}.m{fill:#898781}
 .grid{stroke:#2c2c2a;stroke-width:1}.axis{stroke:#383835;stroke-width:1}
-.c1{fill:#3987e5}.c2{fill:#d95926}.c3{fill:#199e70}.cg{fill:#898781}
+.c1{fill:#3987e5}.c2{fill:#d95926}.c3{fill:#199e70}.cg{fill:#898781}.cv{fill:#4a4a47}
 .l1{stroke:#3987e5}.l2{stroke:#d95926}.l3{stroke:#199e70}
 .o1{fill:#184f95}.o2{fill:#3987e5}.o3{fill:#9ec5f4}
 .ring{stroke:#0d1117;stroke-width:2}

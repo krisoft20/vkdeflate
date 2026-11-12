@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 388" width="760" height="388" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<title id="t">Decode rate per card</title>
+<desc id="d">Grouped bars: decode rate in GB/s per card for AMD Radeon RX 6650 XT: vkdeflate 13.2, Khronos layer 5.9; AMD Radeon RX 9070 XT: vkdeflate 15.0, Khronos layer 8.4.</desc>
+<style>
+.bg{fill:#ffffff}.p{fill:#0b0b0b}.s{fill:#52514e}.m{fill:#898781}
+.grid{stroke:#e1e0d9;stroke-width:1}.axis{stroke:#c3c2b7;stroke-width:1}
+.c1{fill:#2a78d6}.c2{fill:#eb6834}.c3{fill:#1baf7a}.cg{fill:#898781}.cv{fill:#c9c8c0}
+.l1{stroke:#2a78d6}.l2{stroke:#eb6834}.l3{stroke:#1baf7a}
+.o1{fill:#86b6ef}.o2{fill:#2a78d6}.o3{fill:#104281}
+.ring{stroke:#ffffff;stroke-width:2}
+.box{fill:#f4f3ef;stroke:#c3c2b7;stroke-width:1}.hi{fill:#cde2fb;stroke:#2a78d6;stroke-width:1}
+</style>
+<rect width="760" height="388" rx="8" class="bg"/>
+<text x="16.0" y="24.0" class="p" font-size="15" font-weight="600" text-anchor="start">Decode rate per card</text>
+<text x="16.0" y="43.0" class="s" font-size="12" font-weight="400" text-anchor="start">GB/s of output, kernel time, geometric mean over the twelve Silesia streams; higher is better</text>
+<rect x="16.0" y="55.0" width="10.0" height="10.0" rx="2" class="c1"></rect>
+<text x="31.0" y="64.0" class="s" font-size="12" font-weight="400" text-anchor="start">vkdeflate</text>
+<rect x="110.6" y="55.0" width="10.0" height="10.0" rx="2" class="cg"></rect>
+<text x="125.6" y="64.0" class="s" font-size="12" font-weight="400" text-anchor="start">Khronos layer (NVIDIA shaders)</text>
+<rect x="339.6" y="55.0" width="10.0" height="10.0" rx="2" class="cv"></rect>
+<text x="354.6" y="64.0" class="s" font-size="12" font-weight="400" text-anchor="start">VolcanStorage</text>
+<line x1="56.0" y1="340.0" x2="740.0" y2="340.0" class="grid"/>
+<text x="48.0" y="344.0" class="m" font-size="11" font-weight="400" text-anchor="end">0</text>
+<line x1="56.0" y1="260.0" x2="740.0" y2="260.0" class="grid"/>
+<text x="48.0" y="264.0" class="m" font-size="11" font-weight="400" text-anchor="end">5</text>
+<line x1="56.0" y1="180.0" x2="740.0" y2="180.0" class="grid"/>
+<text x="48.0" y="184.0" class="m" font-size="11" font-weight="400" text-anchor="end">10</text>
+<line x1="56.0" y1="100.0" x2="740.0" y2="100.0" class="grid"/>
+<text x="48.0" y="104.0" class="m" font-size="11" font-weight="400" text-anchor="end">15</text>
+<path d="M125.0,340.0 V133.4 Q125.0,129.4 129.0,129.4 H185.0 Q189.0,129.4 189.0,133.4 V340.0 Z" class="c1"><title>AMD Radeon RX 6650 XT, vkdeflate: 13.2 GB/s</title></path>
+<text x="157.0" y="123.4" class="p" font-size="12" font-weight="600" text-anchor="middle">13.2</text>
+<path d="M195.0,340.0 V250.4 Q195.0,246.4 199.0,246.4 H255.0 Q259.0,246.4 259.0,250.4 V340.0 Z" class="cg"><title>AMD Radeon RX 6650 XT, Khronos layer (NVIDIA shaders): 5.9 GB/s</title></path>
+<text x="227.0" y="240.4" class="p" font-size="12" font-weight="400" text-anchor="middle">5.9</text>
+<path d="M265.0,340.0 V297.2 Q265.0,293.2 269.0,293.2 H325.0 Q329.0,293.2 329.0,297.2 V340.0 Z" class="cv"><title>AMD Radeon RX 6650 XT, VolcanStorage: 2.9 GB/s</title></path>
+<text x="297.0" y="287.2" class="p" font-size="12" font-weight="400" text-anchor="middle">2.9</text>
+<text x="227.0" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">RX 6650 XT</text>
+<path d="M502.0,340.0 V103.3 Q502.0,99.3 506.0,99.3 H562.0 Q566.0,99.3 566.0,103.3 V340.0 Z" class="c1"><title>AMD Radeon RX 9070 XT, vkdeflate: 15 GB/s</title></path>
+<text x="534.0" y="93.3" class="p" font-size="12" font-weight="600" text-anchor="middle">15.0</text>
+<path d="M572.0,340.0 V209.5 Q572.0,205.5 576.0,205.5 H632.0 Q636.0,205.5 636.0,209.5 V340.0 Z" class="cg"><title>AMD Radeon RX 9070 XT, Khronos layer (NVIDIA shaders): 8.4 GB/s</title></path>
+<text x="604.0" y="199.5" class="p" font-size="12" font-weight="400" text-anchor="middle">8.4</text>
+<text x="569.0" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">RX 9070 XT</text>
+<line x1="56.0" y1="340.0" x2="740.0" y2="340.0" class="axis"/>
+</svg>

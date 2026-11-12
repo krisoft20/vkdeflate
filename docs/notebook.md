@@ -267,3 +267,22 @@ offers subgroups of 8 or 16 and cannot run the kernel.
 | zeroing loop one word past a shrunken array, into the ring | samba tile 137, webster tile 4 |
 | tail of a dword copy loaded before its source was written | skin.tex tile 276 |
 | head of a dword copy stored after a lane had read it, distance 128 | skin.tex tiles 410, 414 |
+
+## VolcanStorage
+
+`ahmetenesay/VolcanStorage` at 3d1df3e ships a GLSL port of Microsoft's reference shader (the path without wave
+intrinsics). As shipped it does not finish on the RX 6650 XT, and the library dispatches it with no buffers bound.
+
+| fix | why |
+|---|---|
+| `scan`, `scan16`: shuffle moved out of `?:` | GLSL runs one side only, HLSL both; lanes skipped their shared-memory store |
+| `allThreads`: `0xFFFFFFFF` instead of `(1u << 32) - 1u` | shift by 32 is undefined |
+| two shift counts masked to 5 bits, shuffle index clamped | undefined in GLSL; not tested one by one |
+| loop cap | a wrong decode ends instead of hanging the card |
+
+After the fixes: 46 of 46 streams byte-exact. One round, all three decoders in one command buffer, 41 streams:
+
+| | min | median | max |
+|---|---|---|---|
+| VolcanStorage ms / vkdeflate ms | 2.29 | 4.56 | 7.15 |
+| VolcanStorage ms / Khronos ms | 1.59 | 1.98 | 3.30 |

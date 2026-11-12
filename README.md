@@ -1,6 +1,19 @@
-# vkdeflate
+<h1 align="center">vkdeflate</h1>
 
-GPU decompression of GDeflate for Vulkan on any vendor's card: one header, MIT, no driver extension, no layer.
+<p align="center">
+  <img alt="C++17" src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=for-the-badge&logo=cplusplus&logoColor=white">
+  <img alt="Vulkan 1.2+" src="https://img.shields.io/badge/Vulkan-1.2%2B-AC162C?style=for-the-badge&logo=vulkan&logoColor=white">
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D4?style=for-the-badge">
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black">
+  <br>
+  <a href="single_include/vkdeflate.h"><img alt="Single header" src="https://img.shields.io/badge/single-header-6f42c1?style=for-the-badge"></a>
+  <a href="https://github.com/krisoft20/vkdeflate/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/krisoft20/vkdeflate?style=for-the-badge&color=F26B21"></a>
+  <a href="LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/license-MIT-44CC11?style=for-the-badge"></a>
+  <a href="docs/blog.md"><img alt="Write-up" src="https://img.shields.io/badge/docs-write--up-E91E63?style=for-the-badge"></a>
+</p>
+
+GPU decompression of GDeflate for Vulkan on any vendor's card, in one MIT header. No driver extension needed.
+An encoder, a file loader and a Vulkan layer are included.
 
 | **[Blog](docs/blog.md)** | **[Format](docs/FORMAT.md)** | **[Kernel](docs/DESIGN.md)** |
 |:---:|:---:|:---:|
@@ -11,12 +24,14 @@ GDeflate is the format behind DirectStorage and RTX IO. Vulkan has an extension 
 host library that decode the same streams on AMD, Intel and anything else with Vulkan 1.2.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/khronos_AMD_Radeon_RX_6650_XT-dark.svg">
-  <img src="docs/img/khronos_AMD_Radeon_RX_6650_XT.svg" alt="Kernel time per Silesia stream: vkdeflate against the Khronos layer on an RX 6650 XT">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/rates-dark.svg">
+  <img src="docs/img/rates.svg" alt="Decode rate in GB/s per card: vkdeflate 13.2 and 15.0, Khronos layer 5.9 and 8.4, VolcanStorage shader 2.9 on the RX 6650 XT">
 </picture>
 
-Both decoders read the same buffers on the same card; the layer is Khronos's open implementation, with NVIDIA's
-shaders. On all 46 test streams vkdeflate is 1.56x to 4.2x faster on this card and 1.19x to 2.8x on an RX 9070 XT.
+On each card every decoder got the same compressed data. The Khronos layer is Khronos's open
+implementation, with NVIDIA's shaders. On all 46 test streams vkdeflate is 1.56x to 4.2x faster on the RX 6650 XT and 1.19x to 2.8x on the RX 9070 XT.
+VolcanStorage is a GLSL port of Microsoft's reference shader. As shipped it does not finish on the
+RX 6650 XT, so it was measured after four fixes ([notebook](docs/notebook.md#volcanstorage)).
 How this was measured, and where it does not hold: [the write-up](docs/blog.md).
 
 **For you if**
@@ -33,8 +48,19 @@ How this was measured, and where it does not hold: [the write-up](docs/blog.md).
 
 ## Use it
 
-Copy [`single_include/vkdeflate.h`](single_include/vkdeflate.h) into your project. It needs C++17 and the Vulkan
-headers; the shader is inside as SPIR-V.
+Copy [`single_include/vkdeflate.h`](single_include/vkdeflate.h) into your project, or take the CMake target
+`vkdeflate::vkdeflate` with `FetchContent`. It needs C++17 and the Vulkan headers; the shader is inside.
+
+| you want | use |
+|---|---|
+| a file on disk in a buffer or an image | `vkdeflate::load()` |
+| a dispatch in your own command buffer | `vkdeflate::record()` |
+| to keep code written for `VK_EXT_memory_decompression` | `vkdeflate::cmd_decompress_memory()` |
+| no code change | the layer |
+| to make `.gdz` streams | `gdz -c`, or `gdeflate::compress()` |
+| C, or bindings for another language | [`vkdeflate_c.h`](single_include/vkdeflate_c.h) |
+
+The shortest example:
 
 ```cpp
 #define VKDEFLATE_IMPLEMENTATION          // in one .cpp
@@ -43,6 +69,20 @@ headers; the shader is inside as SPIR-V.
 std::string err;
 vkdeflate::ctx_t* ctx = vkdeflate::attach(instance, phys, device, vkGetInstanceProcAddr, {}, err);   // once
 
+vkdeflate::load_t item;
+item.path = "rock_albedo.gdz";
+item.image = image;                 // or item.buffer
+item.extent = {2048, 2048, 1};
+vkdeflate::load(ctx, queue, queue_family, &item, 1, err);
+```
+
+`load()` opens the file, decodes it on the GPU, copies the result into your buffer or image and returns when it
+is done. Several items share one dispatch.
+
+<details>
+<summary>In your own command buffer</summary>
+
+```cpp
 std::vector<vkdeflate::tile_desc_t> tiles;   // per stream, from its first 8 + 4 * tile_count bytes
 size_t out_size;
 vkdeflate::describe(stream, header_bytes, stream_size, tiles, out_size, err);
@@ -52,25 +92,63 @@ vkdeflate::record(ctx, cmd, {src_addr, tiles_addr, dst_addr, status_addr, (uint3
                              vkdeflate::job_flags(tiles, out_size)});
 ```
 
-`describe()` returns the tiles largest first, which shortens the dispatch; `status[i]` belongs to `tiles[i]`.
-`job_flags()` picks the pipeline for streams that are mostly long runs.
+`record()` is one dispatch. You add the barriers around it and check the status words (0 is good,
+`vkdeflate::tile_error()` names the rest). `describe()` returns the tiles largest first, which shortens the
+dispatch; `status[i]` belongs to `tiles[i]`. `job_flags()` picks the pipeline for streams that are mostly long runs.
 
-Code written for `VK_EXT_memory_decompression` keeps its regions:
+</details>
+
+<details>
+<summary>Code written for VK_EXT_memory_decompression</summary>
 
 ```cpp
 vkdeflate::cmd_decompress_memory(ctx, cmd, &info);   // the VkDecompressMemoryInfoEXT you would pass to the driver
 vkdeflate::record_regions_indirect(ctx, cmd, regions_addr, count_addr, max_count, stride);
 ```
 
-[`examples/`](examples/README.md) has four short programs, from one call that does everything to a count written on
-the GPU, and the table from the extension's names to these.
+</details>
 
-`record()` is one dispatch in your command buffer. You own the barriers around it and read the status words
-(0 is good, `vkdeflate::tile_error()` names the rest). The device needs Vulkan 1.2 with `shaderInt64`, `shaderInt8`,
-`storageBuffer8BitAccess`, `bufferDeviceAddress` and `vulkanMemoryModel`, and a subgroup of 32 lanes: native, or
-chosen through `subgroupSizeControl` and `computeFullSubgroups` (core in 1.3, `VK_EXT_subgroup_size_control` before;
-enable them on the device you attach). `gdeflate::decompress()` in the same header is the CPU fallback. There is no encoder yet:
-compress with the reference encoder, which `bench.cmd` builds as `third_party_build\gdref\build\gdref.exe`.
+<details>
+<summary>The layer: no code change</summary>
+
+The build makes `build/layer/VkLayer_vkdeflate` and its manifest. With these two variables set, an application
+gets `VK_EXT_memory_decompression` and `VK_NV_memory_decompression` on a driver that has neither:
+
+    VK_LAYER_PATH=<repo>/build/layer
+    VK_INSTANCE_LAYERS=VK_LAYER_vkdeflate_memory_decompression
+
+</details>
+
+<details>
+<summary>Making streams</summary>
+
+    build\gdz.exe -c rock_albedo.bc7 -o rock_albedo.gdz        level 6; -level 1..12
+
+Against the reference encoder at the same level, Silesia corpus, 12 threads, both run back to back into a
+buffer allocated beforehand:
+
+| level | size | packing speed |
+|---|---|---|
+| 1 to 4 | 0.1 to 0.6 % smaller | 11 to 18 % faster |
+| 5 to 7 | 0.07 to 0.1 % smaller | 6 to 19 % faster |
+| 8, 9 | 0.2 % smaller | 25 to 29 % faster |
+| 10 to 12 | 0.01 to 0.2 % smaller | 9 to 12 % faster |
+
+The output decodes with Microsoft's reference decoder.
+
+</details>
+
+<details>
+<summary>What the device needs</summary>
+
+Vulkan 1.2 with `shaderInt64`, `shaderInt8`, `storageBuffer8BitAccess`, `bufferDeviceAddress` and
+`vulkanMemoryModel`, and a subgroup of 32 lanes: native, or chosen through `subgroupSizeControl` and
+`computeFullSubgroups` (core in 1.3, `VK_EXT_subgroup_size_control` before). Enable them on the device you attach.
+The layer enables them itself. `gdeflate::decompress()` in the same header is the CPU fallback.
+
+</details>
+
+[`examples/`](examples/README.md) has five short programs, one per way in.
 
 ## Benchmark it on your card
 
@@ -96,6 +174,13 @@ decoded byte against the CPU decoder. Results so far, geometric mean of the kern
 | AMD Radeon RX 9070 XT | AMD proprietary driver 26.10.1 (LLPC) | 12 | 15.0 | 8.4 | 1.8× |
 <!-- cards:end -->
 
+Per stream on the RX 6650 XT:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/khronos_AMD_Radeon_RX_6650_XT-dark.svg">
+  <img src="docs/img/khronos_AMD_Radeon_RX_6650_XT.svg" alt="Kernel time per Silesia stream: vkdeflate, the Khronos layer and VolcanStorage on an RX 6650 XT">
+</picture>
+
 A card that is not in this table is the most useful thing you can add: open a pull request with your
 `results\*.csv`. RDNA 4 owners especially, see Limits.
 
@@ -107,23 +192,25 @@ A card that is not in this table is the most useful thing you can add: open a pu
   only the compressed bytes cross the bus.
 - A dispatch of fewer than about 100 tiles (6 MB) costs 0.6 to 1 ms whatever its size. Batch streams into one
   command buffer.
-- RDNA 4 regressed: on an RX 9070 XT the kernel needs 191 vector registers (96 on RDNA2), and some large
-  dispatches are 3-4 % slower than with the previous version. Without an RDNA 4 card here this cannot be narrowed
-  down or fixed. Volunteers wanted: `bench.cmd -khr` and the CSV, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- On RDNA 4 the lead over the Khronos layer is smaller (1.8x on an RX 9070 XT, 2.2x on an RX 6650 XT). The cause
+  is not found. Vector registers were ruled out: halving them changed nothing there. Volunteers wanted:
+  `bench.cmd -khr` and the CSV, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Subgroups narrower than 32 lanes (Mali, PowerVR, software renderers such as llvmpipe) are not supported.
 - On Linux the build and the CPU tests pass (gcc 13, Ubuntu 24.04 under WSL); no Linux GPU has run the kernel yet.
-- No encoder.
+- The layer, `load()` and the encoder are new and have run on one card, an RX 6650 XT. `load()` blocks until the
+  GPU is done and takes at most 4 GB per call.
 - GDeflate compresses like zlib. zstd and Oodle pack tighter; the larger files are the price of a format a GPU can decode.
 
 ## More
 
 - [`docs/notebook.md`](docs/notebook.md): what was tried and the numbers.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): how to send a result from your card.
-- `build\gdz.exe` decodes, validates and fuzzes; `build\attach_test.exe` uses the API on a device of its own.
+- `build\gdz.exe` packs, decodes, validates and fuzzes. `attach_test`, `layer_test` and `c_test` check the API,
+  the layer and the C interface.
 
 ## Sources and licenses
 
-No code was copied from any of these; the decoders are written from `docs/FORMAT.md`.
+No code was copied from any of these; the decoders and the encoder are written from `docs/FORMAT.md`.
 
 | source | what for | license |
 |---|---|---|
@@ -133,6 +220,7 @@ No code was copied from any of these; the decoders are written from `docs/FORMAT
 | Khronos reference pages for `VK_EXT_memory_decompression` | what a decompression region is | Khronos, CC BY 4.0 |
 | Khronos `Vulkan-ExtensionLayer`, `layers/decompression` (`decompression.cpp`, `TileDecoder.glsl`) | the layer's calling contract for `tools/bench.cpp` (one raw tile per region, the indirect path), nothing of its decoder | Apache-2.0 or MIT |
 | Khronos `Vulkan-Headers`, tag v1.4.357 | fetched into `third_party_build` when the build finds no Vulkan headers; not part of this repository | Apache-2.0 or MIT |
+| `ahmetenesay/VolcanStorage`, `shaders/GDeflate.comp` at 3d1df3e | measured in the benchmark after four fixes, nothing used | Apache-2.0 |
 | RFC 1951 | DEFLATE | IETF |
 
 ## License
