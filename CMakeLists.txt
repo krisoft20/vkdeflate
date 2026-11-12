@@ -61,8 +61,30 @@ else()
         VERBATIM)
 endif()
 
-add_library(vkdeflate STATIC src/gdeflate.cpp src/vkdeflate.cpp ${SPV})
-target_include_directories(vkdeflate PUBLIC src ${VULKAN_INCLUDE} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+add_library(vkdeflate STATIC src/gdeflate.cpp src/vkdeflate.cpp src/vkdeflate_c.cpp ${SPV})
+add_library(vkdeflate::vkdeflate ALIAS vkdeflate)
+target_compile_features(vkdeflate PUBLIC cxx_std_17)
+target_include_directories(vkdeflate
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> $<BUILD_INTERFACE:${VULKAN_INCLUDE}> $<INSTALL_INTERFACE:include>
+    PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+find_package(Threads REQUIRED)
+target_link_libraries(vkdeflate PUBLIC Threads::Threads)
+if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    return()
+endif()
+
+include(GNUInstallDirs)
+install(TARGETS vkdeflate EXPORT vkdeflate-targets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(FILES src/gdeflate.h src/vkdeflate.h src/vkdeflate_c.h DESTINATION include)
+install(EXPORT vkdeflate-targets NAMESPACE vkdeflate:: DESTINATION share/vkdeflate)
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/vkdeflate-config.cmake
+    "include(CMakeFindDependencyMacro)\nfind_dependency(Threads)\ninclude(\${CMAKE_CURRENT_LIST_DIR}/vkdeflate-targets.cmake)\n")
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/vkdeflate-config.cmake DESTINATION share/vkdeflate)
+
+option(VKDEFLATE_TOOLS "build the tools, tests, examples and the layer" ON)
+if(NOT VKDEFLATE_TOOLS)
+    return()
+endif()
 
 add_executable(gdz tools/gdz.cpp)
 target_link_libraries(gdz PRIVATE vkdeflate)
@@ -73,11 +95,31 @@ target_link_libraries(attach_test PRIVATE vkdeflate)
 add_executable(bench tools/bench.cpp)
 target_link_libraries(bench PRIVATE vkdeflate)
 
+add_library(VkLayer_vkdeflate SHARED layer/layer.cpp)
+target_link_libraries(VkLayer_vkdeflate PRIVATE vkdeflate)
+set_target_properties(vkdeflate PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(VkLayer_vkdeflate PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/layer
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/layer)
+if(WIN32)
+    set(LAYER_LIBRARY ".\\\\VkLayer_vkdeflate.dll")
+else()
+    set(LAYER_LIBRARY "./libVkLayer_vkdeflate.so")
+endif()
+configure_file(layer/VkLayer_vkdeflate.json.in ${CMAKE_CURRENT_BINARY_DIR}/layer/VkLayer_vkdeflate.json @ONLY)
+
+add_executable(layer_test tools/layer_test.cpp)
+target_link_libraries(layer_test PRIVATE vkdeflate)
+
+enable_language(C)
+add_executable(c_test tools/c_test.c)
+target_link_libraries(c_test PRIVATE vkdeflate)
+
 add_executable(single_test tools/single_test.cpp)
 target_include_directories(single_test PRIVATE ${VULKAN_INCLUDE})
 set_target_properties(single_test PROPERTIES CXX_STANDARD 17)
 
-foreach(e decompress batch regions indirect)
+foreach(e decompress batch regions indirect load)
     add_executable(example_${e} examples/${e}.cpp)
     target_link_libraries(example_${e} PRIVATE vkdeflate)
 endforeach()
@@ -90,7 +132,7 @@ if(Python3_FOUND AND GLSLC)
         VERBATIM)
 endif()
 
-foreach(t vkdeflate gdz attach_test bench single_test example_decompress example_batch example_regions example_indirect)
+foreach(t vkdeflate VkLayer_vkdeflate gdz attach_test layer_test bench single_test example_decompress example_batch example_regions example_indirect example_load)
     if(MSVC)
         target_compile_options(${t} PRIVATE /W4)
     else()

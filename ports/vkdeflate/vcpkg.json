@@ -1,0 +1,19 @@
+{
+  "name": "vkdeflate",
+  "version": "0.3.0",
+  "description": "GDeflate for Vulkan compute on any vendor's GPU: decoder, encoder, file loader",
+  "homepage": "https://github.com/krisoft20/vkdeflate",
+  "license": "MIT",
+  "supports": "!uwp",
+  "dependencies": [
+    "vulkan-headers",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}
