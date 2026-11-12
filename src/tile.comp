@@ -860,48 +860,50 @@ uint huffman_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout 
             }
             if (longest != 0u)
                 copy_own(dst, mpos, shortm ? mlen : 0u, val, longest);
-            pat_t q = pat_t(false, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
-            uint lmask = subgroupBallot(is_dist && !dep && mlen > 24u).x;
-            uint pmask = subgroupBallot(is_dist && !dep && mlen > 24u && mlen <= 4u * LANES && val >= mlen).x;
-            while (bitCount(pmask) >= 2u) {
-                uint ia = uint(findLSB(pmask));
-                pmask &= pmask - 1u;
-                uint ib = uint(findLSB(pmask));
-                pmask &= pmask - 1u;
-                lmask &= ~((1u << ia) | (1u << ib));
-                uint ca = subgroupShuffle(mpos, ia), cb = subgroupShuffle(mpos, ib);
-                uint la = subgroupShuffle(mlen, ia), lb = subgroupShuffle(mlen, ib);
-                copy_pair(dst, ca, la, subgroupShuffle(val, ia), cb, lb, subgroupShuffle(val, ib));
-                ring_from = max(ring_from, max(ca + la, cb + lb));
-            }
-            while (lmask != 0u) {
-                uint i = uint(findLSB(lmask));
-                uint cp = subgroupShuffle(mpos, i);
-                uint cl = subgroupShuffle(mlen, i);
-                copy_one(dst, cp, cl, subgroupShuffle(val, i), q);
-                ring_from = max(ring_from, cp + cl);
-                lmask &= lmask - 1u;
-            }
-            uint dmask = subgroupBallot(dep).x;
-            while (dmask != 0u) {
-                uint i = uint(findLSB(dmask));
-                uint cp = subgroupShuffle(mpos, i);
-                uint cl = subgroupShuffle(mlen, i);
-                uint cd = subgroupShuffle(val, i);
-                ring_lo = max(ring_lo, ring_from);
-                if (cl <= LANES && cp - cd >= ring_lo && g_mirror && RING != 0u && EXPERIMENT != 22) {
-                    subgroupBarrier();
-                    copy_ring(dst, cp, cl, cd);
-                } else {
-                    store_fence();
-                    if (cl <= LANES) {
-                        copy_short(dst, cp, cl, cd);
-                    } else {
-                        copy_one(dst, cp, cl, cd, q);
-                        ring_from = max(ring_from, cp + cl);
-                    }
+            if (subgroupAny(is_dist && (dep || mlen > 24u))) {
+                pat_t q = pat_t(false, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+                uint lmask = subgroupBallot(is_dist && !dep && mlen > 24u).x;
+                uint pmask = subgroupBallot(is_dist && !dep && mlen > 24u && mlen <= 4u * LANES && val >= mlen).x;
+                while (bitCount(pmask) >= 2u) {
+                    uint ia = uint(findLSB(pmask));
+                    pmask &= pmask - 1u;
+                    uint ib = uint(findLSB(pmask));
+                    pmask &= pmask - 1u;
+                    lmask &= ~((1u << ia) | (1u << ib));
+                    uint ca = subgroupShuffle(mpos, ia), cb = subgroupShuffle(mpos, ib);
+                    uint la = subgroupShuffle(mlen, ia), lb = subgroupShuffle(mlen, ib);
+                    copy_pair(dst, ca, la, subgroupShuffle(val, ia), cb, lb, subgroupShuffle(val, ib));
+                    ring_from = max(ring_from, max(ca + la, cb + lb));
                 }
-                dmask &= dmask - 1u;
+                while (lmask != 0u) {
+                    uint i = uint(findLSB(lmask));
+                    uint cp = subgroupShuffle(mpos, i);
+                    uint cl = subgroupShuffle(mlen, i);
+                    copy_one(dst, cp, cl, subgroupShuffle(val, i), q);
+                    ring_from = max(ring_from, cp + cl);
+                    lmask &= lmask - 1u;
+                }
+                uint dmask = subgroupBallot(dep).x;
+                while (dmask != 0u) {
+                    uint i = uint(findLSB(dmask));
+                    uint cp = subgroupShuffle(mpos, i);
+                    uint cl = subgroupShuffle(mlen, i);
+                    uint cd = subgroupShuffle(val, i);
+                    ring_lo = max(ring_lo, ring_from);
+                    if (cl <= LANES && cp - cd >= ring_lo && g_mirror && RING != 0u && EXPERIMENT != 22) {
+                        subgroupBarrier();
+                        copy_ring(dst, cp, cl, cd);
+                    } else {
+                        store_fence();
+                        if (cl <= LANES) {
+                            copy_short(dst, cp, cl, cd);
+                        } else {
+                            copy_one(dst, cp, cl, cd, q);
+                            ring_from = max(ring_from, cp + cl);
+                        }
+                    }
+                    dmask &= dmask - 1u;
+                }
             }
         }
 
