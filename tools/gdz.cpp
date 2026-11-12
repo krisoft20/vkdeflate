@@ -1,5 +1,6 @@
-// gdz - decode, validate and benchmark GDeflate streams on the CPU and on the GPU
+// gdz - pack, decode, validate and benchmark GDeflate streams on the CPU and on the GPU
 //
+//   gdz -c <file> [-o out.gdz] [-level 1..12]               compress with vkdeflate's own encoder
 //   gdz <file.gdz> [-o out] [-ref original] [-gpu] [-threads N] [-rounds N] [-wave32] [-wave64]
 //   gdz -list <manifest> [-gpu] [-threads N] [-rounds N]    manifest: one "<file.gdz> <original>" per line
 //   gdz -fuzz <file.gdz> [-n N] [-seed S] [-gpu]              flips bytes and truncates, expects clean errors
@@ -51,6 +52,8 @@ struct args_t {
     std::string ref;
     std::string list;
     std::string fuzz;
+    std::string pack;
+    int level = 6;
     bool info = false;
     bool gpu = false;
     bool cpu = true;
@@ -389,6 +392,47 @@ static bool fuzz(const args_t& a, vkdeflate::ctx_t* gpu) {
     return gpu_disagree == 0;
 }
 
+static bool pack(const args_t& a) {
+    std::vector<uint8_t> in, out;
+    if (!load(a.pack, in)) {
+        printf("[gdz] cant open %s\n", a.pack.c_str());
+        return false;
+    }
+    std::string err;
+    out.resize(gdeflate::compress_bound(in.size()));
+    size_t packed = 0;
+    auto t0 = std::chrono::steady_clock::now();
+    if (!gdeflate::compress_into(in.data(), in.size(), out.data(), out.size(), packed, err, a.level)) {
+        printf("[gdz] %s\n", err.c_str());
+        return false;
+    }
+    double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    out.resize(packed);
+    std::vector<uint8_t> back(in.size());
+    if (!gdeflate::decompress(out.data(), out.size(), back.data(), back.size(), err) || back != in) {
+        printf("[gdz] the packed stream does not decode back: %s\n", err.c_str());
+        return false;
+    }
+    if (a.verbose) {
+        std::vector<uint8_t> again;
+        if (!gdeflate::compress(in.data(), in.size(), again, err, a.level) || again != out) {
+            printf("[gdz] compress() and compress_into() disagree\n");
+            return false;
+        }
+        printf("[gdz] compress() gives the same bytes\n");
+    }
+    std::string path = a.out.empty() ? a.pack + ".gdz" : a.out;
+    std::ofstream f(path, std::ios::binary);
+    f.write((const char*)out.data(), (std::streamsize)out.size());
+    if (!f) {
+        printf("[gdz] cant write %s\n", path.c_str());
+        return false;
+    }
+    printf("[gdz] %s: %zu -> %zu bytes (%.1f %%), level %d, %.0f MB/s, decodes back\n", path.c_str(), in.size(), out.size(),
+           in.empty() ? 0.0 : 100.0 * out.size() / in.size(), a.level, ms > 0 ? in.size() / 1e6 / (ms / 1e3) : 0.0);
+    return true;
+}
+
 }
 
 int main(int argc, char** argv) {
@@ -396,7 +440,11 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; i++) {
         std::string s = argv[i];
         bool more = i + 1 < argc;
-        if (s == "-o" && more)
+        if (s == "-c" && more)
+            a.pack = argv[++i];
+        else if (s == "-level" && more)
+            a.level = atoi(argv[++i]);
+        else if (s == "-o" && more)
             a.out = argv[++i];
         else if (s == "-ref" && more)
             a.ref = argv[++i];
@@ -446,8 +494,11 @@ int main(int argc, char** argv) {
         } else
             a.file = s;
     }
+    if (!a.pack.empty())
+        return pack(a) ? 0 : 1;
     if (a.file.empty() && a.list.empty() && a.fuzz.empty()) {
-        printf("usage: gdz <file.gdz> [-o out] [-ref original] [-gpu] [-nocpu] [-threads N] [-rounds N] [-wave32|-wave64]\n"
+        printf("usage: gdz -c <file> [-o out.gdz] [-level 1..12]\n"
+               "       gdz <file.gdz> [-o out] [-ref original] [-gpu] [-nocpu] [-threads N] [-rounds N] [-wave32|-wave64]\n"
                "       gdz -list <manifest> [-gpu] [-threads N] [-rounds N]\n"
                "       gdz -fuzz <file.gdz> [-n N] [-seed S] [-gpu]\n");
         return 1;

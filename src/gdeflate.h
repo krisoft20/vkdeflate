@@ -80,4 +80,8 @@ namespace gdeflate {
     bool parse_head(const uint8_t* p, size_t n, size_t stream_size, stream_t& s, std::string& err);
     bool decode_tile(const uint8_t* p, size_t n, uint8_t* out, size_t size, std::string& err, stats_t* st = nullptr);
     bool decompress(const uint8_t* p, size_t n, uint8_t* out, size_t size, std::string& err);
+    bool compress(const uint8_t* p, size_t n, std::vector<uint8_t>& out, std::string& err, int level = 6, unsigned threads = 0);
+    size_t compress_bound(size_t n);
+    bool compress_into(const uint8_t* p, size_t n, uint8_t* out, size_t capacity, size_t& written, std::string& err,
+                       int level = 6, unsigned threads = 0);
 }
