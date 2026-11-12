@@ -10,7 +10,7 @@
 //
 // The layer is found through VK_LAYER_PATH (the folder with VkLayer_khronos_memory_decompression.json).
 // -direct uses vkCmdDecompressMemoryNV (one dispatch per tile inside the layer) instead of the indirect
-// count path (one dispatch for all tiles). -csvdir names the file after the GPU. Exit code 0 only when
+// count path (one dispatch for all tiles). -layer names another layer with the same extension. -csvdir names the file after the GPU. Exit code 0 only when
 // every output matches the CPU decoder.
 //
 // MIT License
@@ -105,7 +105,7 @@ VK_FNS(VK_DECLARE)
 PFN_vkCmdDecompressMemoryNV vkCmdDecompressMemoryNV = nullptr;
 PFN_vkCmdDecompressMemoryIndirectCountNV vkCmdDecompressMemoryIndirectCountNV = nullptr;
 
-constexpr const char* layer_name = "VK_LAYER_KHRONOS_memory_decompression";
+const char* layer_name = "VK_LAYER_KHRONOS_memory_decompression";
 constexpr const char* ext_name = "VK_NV_memory_decompression";
 constexpr const char* stats_name = "VK_KHR_pipeline_executable_properties";
 constexpr const char* subgroup_name = "VK_EXT_subgroup_size_control";
@@ -267,8 +267,12 @@ static void make_device(bool want_layer) {
         VkPhysicalDeviceProperties2 p2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &core};
         vkGetPhysicalDeviceProperties2(phys, &p2);
         uint32_t cus = core.shaderEngineCount * core.shaderArraysPerEngineCount * core.computeUnitsPerShaderArray;
-        device_text += "compute units: " + std::to_string(cus) + ", vector registers per lane up to " +
-                       std::to_string(core.maxVgprAllocation) + "\n";
+        device_text += "compute units: " + std::to_string(cus) + ", simds per unit " +
+                       std::to_string(core.simdPerComputeUnit) + ", waves per simd " +
+                       std::to_string(core.wavefrontsPerSimd) + ", wave size " + std::to_string(core.wavefrontSize) + "\n";
+        device_text += "vector registers: " + std::to_string(core.vgprsPerSimd) + " per simd, " +
+                       std::to_string(core.minVgprAllocation) + " to " + std::to_string(core.maxVgprAllocation) +
+                       " per wave in steps of " + std::to_string(core.vgprAllocationGranularity) + "\n";
     } else if (has_ext("VK_NV_shader_sm_builtins")) {
         VkPhysicalDeviceShaderSMBuiltinsPropertiesNV sm = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SM_BUILTINS_PROPERTIES_NV};
         VkPhysicalDeviceProperties2 p2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &sm};
@@ -709,6 +713,8 @@ int main(int argc, char** argv) {
             a.direct = true;
         else if (s == "-nolayer")
             a.layer = false;
+        else if (s == "-layer" && more)
+            layer_name = argv[++i];
         else if (s == "-regions")
             a.regions = true;
         else if (s[0] == '-') {
