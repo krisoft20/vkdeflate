@@ -97,6 +97,7 @@ constexpr uint32_t lanes = 32;
     X(vkBeginCommandBuffer)     \
     X(vkEndCommandBuffer)       \
     X(vkCmdCopyBuffer)          \
+    X(vkCmdCopyBufferToImage)   \
     X(vkCmdResetQueryPool)      \
     X(vkCmdWriteTimestamp)      \
     X(vkCreateQueryPool)        \
@@ -184,6 +185,10 @@ struct ctx_t {
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkPipeline pipeline_runs = VK_NULL_HANDLE;
     buf_t in, tiles, out, status, up, down, regions;
+    VkCommandPool load_pool = VK_NULL_HANDLE;
+    VkCommandBuffer load_cmd = VK_NULL_HANDLE;
+    VkFence load_fence = VK_NULL_HANDLE;
+    uint32_t load_family = UINT32_MAX;
     VkDeviceSize regions_at = 0;
     std::string err;
 };
@@ -668,6 +673,10 @@ void destroy(ctx_t* g) {
         free_buf(*g, g->up);
         free_buf(*g, g->down);
         free_buf(*g, g->regions);
+        if (g->load_fence)
+            g->f.vkDestroyFence(g->dev, g->load_fence, nullptr);
+        if (g->load_pool)
+            g->f.vkDestroyCommandPool(g->dev, g->load_pool, nullptr);
         if (g->pipeline)
             g->f.vkDestroyPipeline(g->dev, g->pipeline, nullptr);
         if (g->pipeline_runs)
@@ -799,6 +808,234 @@ bool cmd_decompress_memory(ctx_t* g, VkCommandBuffer cmd, const region_t* region
         record_regions(g, cmd, g->regions.addr + g->regions_at, n, sizeof(region_t), 0, flags);
         g->regions_at += bytes;
     }
+    return true;
+}
+
+static bool read_range(const load_t& item, std::vector<uint8_t>& bytes, std::string& err) {
+    FILE* f = fopen(item.path, "rb");
+    if (!f) {
+        err = std::string("cant open ") + item.path;
+        return false;
+    }
+    uint64_t size = item.size;
+    if (!size) {
+#if defined(_WIN32)
+        _fseeki64(f, 0, SEEK_END);
+        uint64_t end = (uint64_t)_ftelli64(f);
+#else
+        fseeko(f, 0, SEEK_END);
+        uint64_t end = (uint64_t)ftello(f);
+#endif
+        size = end > item.offset ? end - item.offset : 0;
+    }
+#if defined(_WIN32)
+    _fseeki64(f, (long long)item.offset, SEEK_SET);
+#else
+    fseeko(f, (off_t)item.offset, SEEK_SET);
+#endif
+    bytes.resize((size_t)size);
+    size_t got = size ? fread(bytes.data(), 1, bytes.size(), f) : 0;
+    fclose(f);
+    if (got != bytes.size()) {
+        err = std::string("short read from ") + item.path;
+        return false;
+    }
+    return true;
+}
+
+bool load(ctx_t* g, VkQueue queue, uint32_t queue_family, const load_t* items, uint32_t count, std::string& err) {
+    struct owner_t {
+        tile_desc_t tile;
+        uint32_t item;
+        uint32_t index;
+    };
+    struct span_t {
+        VkDeviceSize out;
+        size_t size;
+    };
+    if (!count)
+        return true;
+    if (g->owns_device && !queue) {
+        queue = g->queue;
+        queue_family = g->family;
+    }
+    if (!g->f.vkQueueSubmit) {
+#define LOAD_DEVICE_LATE(fn) g->f.fn = (PFN_##fn)g->f.vkGetDeviceProcAddr(g->dev, #fn);
+        VK_FN_DEVICE(LOAD_DEVICE_LATE)
+    }
+
+    std::vector<std::vector<uint8_t>> files(count);
+    std::vector<owner_t> owners;
+    std::vector<span_t> spans(count);
+    VkDeviceSize in_size = 0, out_size = 0;
+    for (uint32_t i = 0; i < count; i++) {
+        const load_t& item = items[i];
+        const uint8_t* bytes = item.data;
+        size_t n = (size_t)item.size;
+        if (!bytes) {
+            if (!item.path) {
+                err = "item " + std::to_string(i) + ": neither path nor data";
+                return false;
+            }
+            if (!read_range(item, files[i], err))
+                return false;
+            bytes = files[i].data();
+            n = files[i].size();
+        }
+        if ((item.buffer != VK_NULL_HANDLE) == (item.image != VK_NULL_HANDLE)) {
+            err = "item " + std::to_string(i) + ": needs a buffer or an image, not both";
+            return false;
+        }
+        std::vector<tile_desc_t> descs;
+        size_t total = 0;
+        if (!describe(bytes, n, n, descs, total, err)) {
+            err = "item " + std::to_string(i) + ": " + err;
+            return false;
+        }
+        if (in_size / 4 + n / 4 + 1 > UINT32_MAX || out_size + total > UINT32_MAX) {
+            err = "more than 4 GB in one load call";
+            return false;
+        }
+        for (const tile_desc_t& t : descs)
+            owners.push_back({{t.src + (uint32_t)(in_size / 4), t.words, t.dst + (uint32_t)out_size, t.size}, i,
+                              t.dst / (uint32_t)gdeflate::TILE_SIZE});
+        spans[i] = {out_size, total};
+        if (files[i].empty() && n)
+            files[i].assign(bytes, bytes + n);
+        in_size += align_up(n, 4);
+        out_size += align_up(total, 256);
+    }
+    if (owners.empty())
+        return true;
+    std::stable_sort(owners.begin(), owners.end(), [](const owner_t& a, const owner_t& b) { return a.tile.words > b.tile.words; });
+    std::vector<tile_desc_t> tiles(owners.size());
+    for (size_t i = 0; i < owners.size(); i++)
+        tiles[i] = owners[i].tile;
+
+    constexpr VkBufferUsageFlags storage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    constexpr VkBufferUsageFlags xfer_dst = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    constexpr VkBufferUsageFlags xfer_src = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    constexpr VkMemoryPropertyFlags local = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    constexpr VkMemoryPropertyFlags visible = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    VkDeviceSize tiles_size = tiles.size() * sizeof(tile_desc_t);
+    VkDeviceSize status_size = tiles.size() * 4;
+    VkDeviceSize up_tiles = align_up(in_size, 256);
+    VkResult r = VK_SUCCESS;
+    if (!make_buf(*g, g->in, in_size, storage | xfer_dst, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
+        !make_buf(*g, g->tiles, tiles_size, storage | xfer_dst, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
+        !make_buf(*g, g->out, out_size, storage | xfer_src, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
+        !make_buf(*g, g->status, status_size, storage | xfer_src, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
+        !make_buf(*g, g->up, up_tiles + tiles_size, xfer_src, visible, local) ||
+        !make_buf(*g, g->down, status_size, xfer_dst, visible | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, local)) {
+        err = g->err;
+        return false;
+    }
+    if (g->load_family != queue_family) {
+        if (g->load_pool)
+            g->f.vkDestroyCommandPool(g->dev, g->load_pool, nullptr);
+        g->load_pool = VK_NULL_HANDLE;
+        VkCommandPoolCreateInfo pci = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+        pci.queueFamilyIndex = queue_family;
+        VkCommandBufferAllocateInfo cai = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+        cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cai.commandBufferCount = 1;
+        if ((r = g->f.vkCreateCommandPool(g->dev, &pci, nullptr, &g->load_pool)) == VK_SUCCESS) {
+            cai.commandPool = g->load_pool;
+            r = g->f.vkAllocateCommandBuffers(g->dev, &cai, &g->load_cmd);
+        }
+        VkFenceCreateInfo fci = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+        if (r == VK_SUCCESS && !g->load_fence)
+            r = g->f.vkCreateFence(g->dev, &fci, nullptr, &g->load_fence);
+        if (r != VK_SUCCESS) {
+            err = "load: command pool or fence failed: " + std::to_string((int)r);
+            return false;
+        }
+        g->load_family = queue_family;
+    }
+
+    uint8_t* up = (uint8_t*)g->up.map;
+    VkDeviceSize at = 0;
+    for (uint32_t i = 0; i < count; i++) {
+        VkDeviceSize padded = align_up(files[i].size(), 4);
+        if (!files[i].empty())
+            memcpy(up + at, files[i].data(), files[i].size());
+        memset(up + at + files[i].size(), 0, (size_t)(padded - files[i].size()));
+        at += padded;
+    }
+    memcpy(up + up_tiles, tiles.data(), (size_t)tiles_size);
+
+    g->f.vkResetCommandPool(g->dev, g->load_pool, 0);
+    VkCommandBufferBeginInfo bi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VkCommandBuffer cmd = g->load_cmd;
+    g->f.vkBeginCommandBuffer(cmd, &bi);
+    VkBufferCopy c_in = {0, 0, in_size};
+    VkBufferCopy c_tiles = {up_tiles, 0, tiles_size};
+    g->f.vkCmdCopyBuffer(cmd, g->up.buf, g->in.buf, 1, &c_in);
+    g->f.vkCmdCopyBuffer(cmd, g->up.buf, g->tiles.buf, 1, &c_tiles);
+    barrier(*g, cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_ACCESS_SHADER_READ_BIT);
+    record(g, cmd, job_t{g->in.addr, g->tiles.addr, g->out.addr, g->status.addr, (uint32_t)tiles.size(),
+                         job_flags(tiles, (size_t)out_size)});
+    barrier(*g, cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+            VK_ACCESS_TRANSFER_READ_BIT);
+    for (uint32_t i = 0; i < count; i++) {
+        const load_t& item = items[i];
+        if (!spans[i].size)
+            continue;
+        if (item.buffer) {
+            VkBufferCopy c = {spans[i].out, item.buffer_offset, spans[i].size};
+            g->f.vkCmdCopyBuffer(cmd, g->out.buf, item.buffer, 1, &c);
+            continue;
+        }
+        VkImageMemoryBarrier ib = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        ib.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        ib.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        ib.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        ib.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        ib.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        ib.image = item.image;
+        ib.subresourceRange = {item.layers.aspectMask, item.layers.mipLevel, 1, item.layers.baseArrayLayer, item.layers.layerCount};
+        g->f.vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
+                                  nullptr, 1, &ib);
+        VkBufferImageCopy c = {};
+        c.bufferOffset = spans[i].out;
+        c.imageSubresource = item.layers;
+        c.imageExtent = item.extent;
+        g->f.vkCmdCopyBufferToImage(cmd, g->out.buf, item.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &c);
+        ib.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        ib.dstAccessMask = 0;
+        ib.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        ib.newLayout = item.layout;
+        g->f.vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr,
+                                  0, nullptr, 1, &ib);
+    }
+    VkBufferCopy c_status = {0, 0, status_size};
+    g->f.vkCmdCopyBuffer(cmd, g->status.buf, g->down.buf, 1, &c_status);
+    barrier(*g, cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_ACCESS_HOST_READ_BIT);
+    g->f.vkEndCommandBuffer(cmd);
+
+    VkSubmitInfo si = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    si.commandBufferCount = 1;
+    si.pCommandBuffers = &cmd;
+    if ((r = g->f.vkQueueSubmit(queue, 1, &si, g->load_fence)) != VK_SUCCESS) {
+        err = "vkQueueSubmit failed: " + std::to_string((int)r);
+        return false;
+    }
+    r = g->f.vkWaitForFences(g->dev, 1, &g->load_fence, VK_TRUE, UINT64_MAX);
+    g->f.vkResetFences(g->dev, 1, &g->load_fence);
+    if (r != VK_SUCCESS) {
+        err = "vkWaitForFences failed: " + std::to_string((int)r);
+        return false;
+    }
+    const uint32_t* status = (const uint32_t*)g->down.map;
+    for (size_t i = 0; i < owners.size(); i++)
+        if (status[i]) {
+            err = "item " + std::to_string(owners[i].item) + ", tile " + std::to_string(owners[i].index) + ": " +
+                  tile_error(status[i]);
+            return false;
+        }
     return true;
 }
 

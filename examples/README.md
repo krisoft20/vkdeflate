@@ -9,11 +9,13 @@ Each one decodes on the GPU and compares the result with the CPU decoder. `.\bui
 | [`batch.cpp`](batch.cpp) | `attach()`, `describe()`, `record()` | your device and buffers, several streams in one command buffer |
 | [`regions.cpp`](regions.cpp) | `cmd_decompress_memory()` | the `vkCmdDecompressMemoryEXT` call shape: an array of regions in host memory, one raw tile each |
 | [`indirect.cpp`](indirect.cpp) | `record_regions_indirect()` | regions in GPU memory and their count written on the GPU, as `vkCmdDecompressMemoryIndirectCountEXT` |
+| [`load.cpp`](load.cpp) | `load()` | a file on disk into a buffer and into an image, one call |
 
     build\example_decompress.exe test\vectors\dickens.l6.gdz
     build\example_batch.exe a.gdz b.gdz c.gdz
     build\example_regions.exe test\vectors\dickens.l6.gdz
     build\example_indirect.exe test\vectors\dickens.l6.gdz
+    build\example_load.exe test\vectors\dickens.l6.gdz
 
 [`common.h`](common.h) is the Vulkan setup they share: an instance, a device with the features vkdeflate needs,
 host-visible buffers with device addresses, one submit.

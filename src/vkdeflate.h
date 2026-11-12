@@ -106,6 +106,19 @@ namespace vkdeflate {
         VkDeviceSize size;
     };
 
+    struct load_t {
+        const char* path = nullptr;
+        uint64_t offset = 0;
+        uint64_t size = 0;
+        const uint8_t* data = nullptr;
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VkDeviceSize buffer_offset = 0;
+        VkImage image = VK_NULL_HANDLE;
+        VkImageSubresourceLayers layers = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        VkExtent3D extent = {};
+        VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    };
+
     struct ctx_t;
 
     ctx_t* create(const config_t& cfg, std::string& err);
@@ -136,6 +149,8 @@ namespace vkdeflate {
         return cmd_decompress_memory(ctx, cmd, (const region_t*)info->pRegions, info->regionCount);
     }
 #endif
+
+    bool load(ctx_t* ctx, VkQueue queue, uint32_t queue_family, const load_t* items, uint32_t count, std::string& err);
 
     bool decompress(ctx_t* ctx, const uint8_t* in, size_t n, uint8_t* out, size_t size, std::string& err,
                     timing_t* timing = nullptr);
