@@ -113,4 +113,4 @@ jobs:
           fi
           cat notes.txt
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.txt
-          gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz single_include/vkdeflate.h --clobber
+          gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz single_include/vkdeflate.h single_include/vkdeflate_c.h --clobber
