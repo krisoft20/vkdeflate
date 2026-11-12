@@ -32,12 +32,16 @@ HEAD = """// vkdeflate.h - GDeflate 1.0 decoder for Vulkan compute, with a CPU r
 // storageBuffer8BitAccess, bufferDeviceAddress, vulkanMemoryModel and a subgroup of 32 lanes, native or
 // through subgroup size control.
 //
+//     gdeflate::compress(data, n, stream, err)                            encoder, CPU
 //     gdeflate::decompress(stream, n, out, size, err)                     CPU, any machine
 //     vkdeflate::describe(stream, header_bytes, n, tiles, out_size, err)  stream header -> tile table
 //     vkdeflate::attach(instance, phys, device, vkGetInstanceProcAddr, {}, err)
 //     vkdeflate::record(ctx, cmd, {src, tiles, dst, status, count, flags}) one dispatch in your command buffer
 //     vkdeflate::cmd_decompress_memory(ctx, cmd, &info)                   VK_EXT_memory_decompression regions
+//     vkdeflate::load(ctx, queue, family, items, count, err)              files into your buffers and images
 //     vkdeflate::create({}, err) / vkdeflate::decompress(ctx, ...)        standalone: own device, host memory
+//
+// From C: vkdeflate_c.h next to this file declares the same calls as plain functions.
 //
 """
 
@@ -107,6 +111,8 @@ def main():
     cpu = drop(body(read('src/gdeflate.cpp')), '#include "gdeflate.h"')
     gpu = drop(body(read('src/vkdeflate.cpp')), '#define _CRT_SECURE_NO_WARNINGS', '#define VK_NO_PROTOTYPES',
                '#include "gdeflate.h"', '#include "vkdeflate.h"')
+    capi_decl = body(read('src/vkdeflate_c.h'))
+    capi = drop(body(read('src/vkdeflate_c.cpp')), '#include "gdeflate.h"', '#include "vkdeflate.h"', '#include "vkdeflate_c.h"')
     for m in sorted(KEEP):
         gpu = swap(gpu, '#define %s\n' % m, '#ifndef %s\n#define %s\n#endif\n' % (m, m))
     if a.check:
@@ -129,10 +135,14 @@ def main():
             '#if defined(VKDEFLATE_IMPLEMENTATION) && !defined(VKDEFLATE_IMPLEMENTATION_DONE)\n'
             '#define VKDEFLATE_IMPLEMENTATION_DONE\n\n'
             '#if defined(_MSC_VER)\n#pragma warning(push)\n#pragma warning(disable : 4996)\n#endif\n\n'
-            + cpu + '\n' + gpu + '\n' + ''.join('#undef %s\n' % m for m in macros) +
+            + cpu + '\n' + gpu + '\n' + capi_decl + '\n' + capi + '\n' + ''.join('#undef %s\n' % m for m in macros) +
             '\n#if defined(_MSC_VER)\n#pragma warning(pop)\n#endif\n\n#endif\n')
 
+    c_out = os.path.join(os.path.dirname(a.out), 'vkdeflate_c.h')
     if a.check:
+        with open(c_out, encoding='utf-8') as f:
+            if f.read().replace('\r', '') != read('src/vkdeflate_c.h'):
+                sys.exit('amalgamate: %s is older than src/' % os.path.relpath(c_out, ROOT))
         with open(a.out, encoding='utf-8') as f:
             if f.read().replace('\r', '') != text:
                 sys.exit('amalgamate: %s is older than src/' % os.path.relpath(a.out, ROOT))
@@ -144,6 +154,8 @@ def main():
         f.write(text)
     print('amalgamate: %s, %d bytes, %d lines' % (os.path.relpath(a.out, ROOT), len(text), text.count('\n')))
 
+    with open(c_out, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(read('src/vkdeflate_c.h'))
     os.makedirs(os.path.dirname(pre), exist_ok=True)
     with open(pre, 'w', encoding='utf-8', newline='\n') as f:
         f.write('// src/tile.comp compiled by glslc, sha256 of the source %s\n%s\n' % (tile_hash(), spv))
