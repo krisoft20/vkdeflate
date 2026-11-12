@@ -50,6 +50,7 @@ How this was measured, and where it does not hold: [the write-up](docs/blog.md).
 
 Copy [`single_include/vkdeflate.h`](single_include/vkdeflate.h) into your project, or take the CMake target
 `vkdeflate::vkdeflate` with `FetchContent`. It needs C++17 and the Vulkan headers; the shader is inside.
+With vcpkg: `vcpkg install vkdeflate --overlay-ports=<repo>/ports`.
 
 | you want | use |
 |---|---|
