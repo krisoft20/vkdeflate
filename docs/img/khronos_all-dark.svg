@@ -28,64 +28,64 @@
 <line x1="700.0" y1="78.0" x2="700.0" y2="654.0" class="grid"/>
 <text x="700.0" y="670.0" class="m" font-size="11" font-weight="400" text-anchor="middle">8 ms</text>
 <text x="140.0" y="102.0" class="s" font-size="12" font-weight="400" text-anchor="end">dickens (156)</text>
-<path d="M150.0,84.0 H192.8 Q196.8,84.0 196.8,88.0 V93.0 Q196.8,97.0 192.8,97.0 H150.0 Z" class="c1"><title>dickens (156), vkdeflate: 0.68 ms</title></path>
-<path d="M150.0,99.0 H328.2 Q332.2,99.0 332.2,103.0 V108.0 Q332.2,112.0 328.2,112.0 H150.0 Z" class="cg"><title>dickens (156), Khronos layer: 2.65 ms</title></path>
-<text x="340.2" y="102.0" class="p" font-size="12" font-weight="400" text-anchor="start">3.9×</text>
+<path d="M150.0,84.0 H185.9 Q189.9,84.0 189.9,88.0 V93.0 Q189.9,97.0 185.9,97.0 H150.0 Z" class="c1"><title>dickens (156), vkdeflate: 0.58 ms</title></path>
+<path d="M150.0,99.0 H327.5 Q331.5,99.0 331.5,103.0 V108.0 Q331.5,112.0 327.5,112.0 H150.0 Z" class="cg"><title>dickens (156), Khronos layer: 2.64 ms</title></path>
+<text x="339.5" y="102.0" class="p" font-size="12" font-weight="400" text-anchor="start">4.6×</text>
 <text x="140.0" y="140.0" class="s" font-size="12" font-weight="400" text-anchor="end">zeros 32 MB (512)</text>
 <path d="M150.0,122.0 H152.4 Q154.8,122.0 154.8,124.4 V132.6 Q154.8,135.0 152.4,135.0 H150.0 Z" class="c1"><title>zeros 32 MB (512), vkdeflate: 0.07 ms</title></path>
 <path d="M150.0,137.0 H162.5 Q166.5,137.0 166.5,141.0 V146.0 Q166.5,150.0 162.5,150.0 H150.0 Z" class="cg"><title>zeros 32 MB (512), Khronos layer: 0.24 ms</title></path>
 <text x="174.5" y="140.0" class="p" font-size="12" font-weight="400" text-anchor="start">3.4×</text>
 <text x="140.0" y="178.0" class="s" font-size="12" font-weight="400" text-anchor="end">x-ray (130)</text>
-<path d="M150.0,160.0 H231.9 Q235.9,160.0 235.9,164.0 V169.0 Q235.9,173.0 231.9,173.0 H150.0 Z" class="c1"><title>x-ray (130), vkdeflate: 1.25 ms</title></path>
+<path d="M150.0,160.0 H217.5 Q221.5,160.0 221.5,164.0 V169.0 Q221.5,173.0 217.5,173.0 H150.0 Z" class="c1"><title>x-ray (130), vkdeflate: 1.04 ms</title></path>
 <path d="M150.0,175.0 H385.2 Q389.2,175.0 389.2,179.0 V184.0 Q389.2,188.0 385.2,188.0 H150.0 Z" class="cg"><title>x-ray (130), Khronos layer: 3.48 ms</title></path>
-<text x="397.2" y="178.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.8×</text>
+<text x="397.2" y="178.0" class="p" font-size="12" font-weight="400" text-anchor="start">3.3×</text>
 <text x="140.0" y="216.0" class="s" font-size="12" font-weight="400" text-anchor="end">xml (82)</text>
-<path d="M150.0,198.0 H188.6 Q192.6,198.0 192.6,202.0 V207.0 Q192.6,211.0 188.6,211.0 H150.0 Z" class="c1"><title>xml (82), vkdeflate: 0.62 ms</title></path>
+<path d="M150.0,198.0 H185.2 Q189.2,198.0 189.2,202.0 V207.0 Q189.2,211.0 185.2,211.0 H150.0 Z" class="c1"><title>xml (82), vkdeflate: 0.57 ms</title></path>
 <path d="M150.0,213.0 H240.9 Q244.9,213.0 244.9,217.0 V222.0 Q244.9,226.0 240.9,226.0 H150.0 Z" class="cg"><title>xml (82), Khronos layer: 1.38 ms</title></path>
-<text x="252.9" y="216.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.2×</text>
+<text x="252.9" y="216.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.4×</text>
 <text x="140.0" y="254.0" class="s" font-size="12" font-weight="400" text-anchor="end">osdb (154)</text>
-<path d="M150.0,236.0 H195.5 Q199.5,236.0 199.5,240.0 V245.0 Q199.5,249.0 195.5,249.0 H150.0 Z" class="c1"><title>osdb (154), vkdeflate: 0.72 ms</title></path>
+<path d="M150.0,236.0 H190.7 Q194.7,236.0 194.7,240.0 V245.0 Q194.7,249.0 190.7,249.0 H150.0 Z" class="c1"><title>osdb (154), vkdeflate: 0.65 ms</title></path>
 <path d="M150.0,251.0 H246.4 Q250.4,251.0 250.4,255.0 V260.0 Q250.4,264.0 246.4,264.0 H150.0 Z" class="cg"><title>osdb (154), Khronos layer: 1.46 ms</title></path>
-<text x="258.4" y="254.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.0×</text>
-<text x="140.0" y="292.0" class="s" font-size="12" font-weight="400" text-anchor="end">webster (633)</text>
-<path d="M150.0,274.0 H271.1 Q275.1,274.0 275.1,278.0 V283.0 Q275.1,287.0 271.1,287.0 H150.0 Z" class="c1"><title>webster (633), vkdeflate: 1.82 ms</title></path>
-<path d="M150.0,289.0 H385.2 Q389.2,289.0 389.2,293.0 V298.0 Q389.2,302.0 385.2,302.0 H150.0 Z" class="cg"><title>webster (633), Khronos layer: 3.48 ms</title></path>
-<text x="397.2" y="292.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.9×</text>
-<text x="140.0" y="330.0" class="s" font-size="12" font-weight="400" text-anchor="end">provinces.bin (3126)</text>
-<path d="M150.0,312.0 H313.1 Q317.1,312.0 317.1,316.0 V321.0 Q317.1,325.0 313.1,325.0 H150.0 Z" class="c1"><title>provinces.bin (3126), vkdeflate: 2.43 ms</title></path>
-<path d="M150.0,327.0 H455.4 Q459.4,327.0 459.4,331.0 V336.0 Q459.4,340.0 455.4,340.0 H150.0 Z" class="cg"><title>provinces.bin (3126), Khronos layer: 4.5 ms</title></path>
-<text x="467.4" y="330.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.9×</text>
-<text x="140.0" y="368.0" class="s" font-size="12" font-weight="400" text-anchor="end">climate.bin (98)</text>
-<path d="M150.0,350.0 H227.8 Q231.8,350.0 231.8,354.0 V359.0 Q231.8,363.0 227.8,363.0 H150.0 Z" class="c1"><title>climate.bin (98), vkdeflate: 1.19 ms</title></path>
-<path d="M150.0,365.0 H287.6 Q291.6,365.0 291.6,369.0 V374.0 Q291.6,378.0 287.6,378.0 H150.0 Z" class="cg"><title>climate.bin (98), Khronos layer: 2.06 ms</title></path>
-<text x="299.6" y="368.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.7×</text>
+<text x="258.4" y="254.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.2×</text>
+<text x="140.0" y="292.0" class="s" font-size="12" font-weight="400" text-anchor="end">skin.tex (705)</text>
+<path d="M150.0,274.0 H226.4 Q230.4,274.0 230.4,278.0 V283.0 Q230.4,287.0 226.4,287.0 H150.0 Z" class="c1"><title>skin.tex (705), vkdeflate: 1.17 ms</title></path>
+<path d="M150.0,289.0 H311.0 Q315.0,289.0 315.0,293.0 V298.0 Q315.0,302.0 311.0,302.0 H150.0 Z" class="cg"><title>skin.tex (705), Khronos layer: 2.4 ms</title></path>
+<text x="323.0" y="292.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.1×</text>
+<text x="140.0" y="330.0" class="s" font-size="12" font-weight="400" text-anchor="end">webster (633)</text>
+<path d="M150.0,312.0 H258.1 Q262.1,312.0 262.1,316.0 V321.0 Q262.1,325.0 258.1,325.0 H150.0 Z" class="c1"><title>webster (633), vkdeflate: 1.63 ms</title></path>
+<path d="M150.0,327.0 H368.1 Q372.1,327.0 372.1,331.0 V336.0 Q372.1,340.0 368.1,340.0 H150.0 Z" class="cg"><title>webster (633), Khronos layer: 3.23 ms</title></path>
+<text x="380.1" y="330.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.0×</text>
+<text x="140.0" y="368.0" class="s" font-size="12" font-weight="400" text-anchor="end">provinces.bin (3126)</text>
+<path d="M150.0,350.0 H300.7 Q304.7,350.0 304.7,354.0 V359.0 Q304.7,363.0 300.7,363.0 H150.0 Z" class="c1"><title>provinces.bin (3126), vkdeflate: 2.25 ms</title></path>
+<path d="M150.0,365.0 H448.5 Q452.5,365.0 452.5,369.0 V374.0 Q452.5,378.0 448.5,378.0 H150.0 Z" class="cg"><title>provinces.bin (3126), Khronos layer: 4.4 ms</title></path>
+<text x="460.5" y="368.0" class="p" font-size="12" font-weight="400" text-anchor="start">2.0×</text>
 <text x="140.0" y="406.0" class="s" font-size="12" font-weight="400" text-anchor="end">silesia (2048)</text>
-<path d="M150.0,388.0 H437.5 Q441.5,388.0 441.5,392.0 V397.0 Q441.5,401.0 437.5,401.0 H150.0 Z" class="c1"><title>silesia (2048), vkdeflate: 4.24 ms</title></path>
-<path d="M150.0,403.0 H647.2 Q651.2,403.0 651.2,407.0 V412.0 Q651.2,416.0 647.2,416.0 H150.0 Z" class="cg"><title>silesia (2048), Khronos layer: 7.29 ms</title></path>
-<text x="659.2" y="406.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.7×</text>
-<text x="140.0" y="444.0" class="s" font-size="12" font-weight="400" text-anchor="end">skin.tex (705)</text>
-<path d="M150.0,426.0 H242.9 Q246.9,426.0 246.9,430.0 V435.0 Q246.9,439.0 242.9,439.0 H150.0 Z" class="c1"><title>skin.tex (705), vkdeflate: 1.41 ms</title></path>
-<path d="M150.0,441.0 H311.7 Q315.7,441.0 315.7,445.0 V450.0 Q315.7,454.0 311.7,454.0 H150.0 Z" class="cg"><title>skin.tex (705), Khronos layer: 2.41 ms</title></path>
-<text x="323.7" y="444.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.7×</text>
+<path d="M150.0,388.0 H405.2 Q409.2,388.0 409.2,392.0 V397.0 Q409.2,401.0 405.2,401.0 H150.0 Z" class="c1"><title>silesia (2048), vkdeflate: 3.77 ms</title></path>
+<path d="M150.0,403.0 H641.0 Q645.0,403.0 645.0,407.0 V412.0 Q645.0,416.0 641.0,416.0 H150.0 Z" class="cg"><title>silesia (2048), Khronos layer: 7.2 ms</title></path>
+<text x="653.0" y="406.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.9×</text>
+<text x="140.0" y="444.0" class="s" font-size="12" font-weight="400" text-anchor="end">climate.bin (98)</text>
+<path d="M150.0,426.0 H220.9 Q224.9,426.0 224.9,430.0 V435.0 Q224.9,439.0 220.9,439.0 H150.0 Z" class="c1"><title>climate.bin (98), vkdeflate: 1.09 ms</title></path>
+<path d="M150.0,441.0 H287.6 Q291.6,441.0 291.6,445.0 V450.0 Q291.6,454.0 287.6,454.0 H150.0 Z" class="cg"><title>climate.bin (98), Khronos layer: 2.06 ms</title></path>
+<text x="299.6" y="444.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.9×</text>
 <text x="140.0" y="482.0" class="s" font-size="12" font-weight="400" text-anchor="end">mozilla (128)</text>
-<path d="M150.0,464.0 H220.2 Q224.2,464.0 224.2,468.0 V473.0 Q224.2,477.0 220.2,477.0 H150.0 Z" class="c1"><title>mozilla (128), vkdeflate: 1.08 ms</title></path>
+<path d="M150.0,464.0 H212.0 Q216.0,464.0 216.0,468.0 V473.0 Q216.0,477.0 212.0,477.0 H150.0 Z" class="c1"><title>mozilla (128), vkdeflate: 0.96 ms</title></path>
 <path d="M150.0,479.0 H269.1 Q273.1,479.0 273.1,483.0 V488.0 Q273.1,492.0 269.1,492.0 H150.0 Z" class="cg"><title>mozilla (128), Khronos layer: 1.79 ms</title></path>
-<text x="281.1" y="482.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.7×</text>
-<text x="140.0" y="520.0" class="s" font-size="12" font-weight="400" text-anchor="end">nci (512)</text>
-<path d="M150.0,502.0 H196.2 Q200.2,502.0 200.2,506.0 V511.0 Q200.2,515.0 196.2,515.0 H150.0 Z" class="c1"><title>nci (512), vkdeflate: 0.73 ms</title></path>
-<path d="M150.0,517.0 H227.8 Q231.8,517.0 231.8,521.0 V526.0 Q231.8,530.0 227.8,530.0 H150.0 Z" class="cg"><title>nci (512), Khronos layer: 1.19 ms</title></path>
-<text x="239.8" y="520.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.6×</text>
-<text x="140.0" y="558.0" class="s" font-size="12" font-weight="400" text-anchor="end">human.portrait (848)</text>
-<path d="M150.0,540.0 H335.1 Q339.1,540.0 339.1,544.0 V549.0 Q339.1,553.0 335.1,553.0 H150.0 Z" class="c1"><title>human.portrait (848), vkdeflate: 2.75 ms</title></path>
-<path d="M150.0,555.0 H447.1 Q451.1,555.0 451.1,559.0 V564.0 Q451.1,568.0 447.1,568.0 H150.0 Z" class="cg"><title>human.portrait (848), Khronos layer: 4.38 ms</title></path>
-<text x="459.1" y="558.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.6×</text>
-<text x="140.0" y="596.0" class="s" font-size="12" font-weight="400" text-anchor="end">terrain_albedo.tex (598)</text>
-<path d="M150.0,578.0 H265.6 Q269.6,578.0 269.6,582.0 V587.0 Q269.6,591.0 265.6,591.0 H150.0 Z" class="c1"><title>terrain_albedo.tex (598), vkdeflate: 1.74 ms</title></path>
-<path d="M150.0,593.0 H336.4 Q340.4,593.0 340.4,597.0 V602.0 Q340.4,606.0 336.4,606.0 H150.0 Z" class="cg"><title>terrain_albedo.tex (598), Khronos layer: 2.77 ms</title></path>
-<text x="348.4" y="596.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.6×</text>
-<text x="140.0" y="634.0" class="s" font-size="12" font-weight="400" text-anchor="end">mozilla (782)</text>
-<path d="M150.0,616.0 H302.1 Q306.1,616.0 306.1,620.0 V625.0 Q306.1,629.0 302.1,629.0 H150.0 Z" class="c1"><title>mozilla (782), vkdeflate: 2.27 ms</title></path>
-<path d="M150.0,631.0 H388.0 Q392.0,631.0 392.0,635.0 V640.0 Q392.0,644.0 388.0,644.0 H150.0 Z" class="cg"><title>mozilla (782), Khronos layer: 3.52 ms</title></path>
-<text x="400.0" y="634.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.6×</text>
+<text x="281.1" y="482.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.9×</text>
+<text x="140.0" y="520.0" class="s" font-size="12" font-weight="400" text-anchor="end">mozilla (782)</text>
+<path d="M150.0,502.0 H278.7 Q282.7,502.0 282.7,506.0 V511.0 Q282.7,515.0 278.7,515.0 H150.0 Z" class="c1"><title>mozilla (782), vkdeflate: 1.93 ms</title></path>
+<path d="M150.0,517.0 H388.0 Q392.0,517.0 392.0,521.0 V526.0 Q392.0,530.0 388.0,530.0 H150.0 Z" class="cg"><title>mozilla (782), Khronos layer: 3.52 ms</title></path>
+<text x="400.0" y="520.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.8×</text>
+<text x="140.0" y="558.0" class="s" font-size="12" font-weight="400" text-anchor="end">terrain_albedo.tex (598)</text>
+<path d="M150.0,540.0 H254.6 Q258.6,540.0 258.6,544.0 V549.0 Q258.6,553.0 254.6,553.0 H150.0 Z" class="c1"><title>terrain_albedo.tex (598), vkdeflate: 1.58 ms</title></path>
+<path d="M150.0,555.0 H336.4 Q340.4,555.0 340.4,559.0 V564.0 Q340.4,568.0 336.4,568.0 H150.0 Z" class="cg"><title>terrain_albedo.tex (598), Khronos layer: 2.77 ms</title></path>
+<text x="348.4" y="558.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.8×</text>
+<text x="140.0" y="596.0" class="s" font-size="12" font-weight="400" text-anchor="end">human.portrait (848)</text>
+<path d="M150.0,578.0 H314.4 Q318.4,578.0 318.4,582.0 V587.0 Q318.4,591.0 314.4,591.0 H150.0 Z" class="c1"><title>human.portrait (848), vkdeflate: 2.45 ms</title></path>
+<path d="M150.0,593.0 H440.9 Q444.9,593.0 444.9,597.0 V602.0 Q444.9,606.0 440.9,606.0 H150.0 Z" class="cg"><title>human.portrait (848), Khronos layer: 4.29 ms</title></path>
+<text x="452.9" y="596.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.8×</text>
+<text x="140.0" y="634.0" class="s" font-size="12" font-weight="400" text-anchor="end">nci (512)</text>
+<path d="M150.0,616.0 H193.4 Q197.4,616.0 197.4,620.0 V625.0 Q197.4,629.0 193.4,629.0 H150.0 Z" class="c1"><title>nci (512), vkdeflate: 0.69 ms</title></path>
+<path d="M150.0,631.0 H225.8 Q229.8,631.0 229.8,635.0 V640.0 Q229.8,644.0 225.8,644.0 H150.0 Z" class="cg"><title>nci (512), Khronos layer: 1.16 ms</title></path>
+<text x="237.8" y="634.0" class="p" font-size="12" font-weight="400" text-anchor="start">1.7×</text>
 <line x1="150.0" y1="78.0" x2="150.0" y2="654.0" class="axis"/>
 </svg>

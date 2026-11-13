@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 344" width="760" height="344" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
 <title id="t">A dispatch needs hundreds of tiles before the GPU is full</title>
-<desc id="d">Line chart: output rate grows from 0.12 GB/s at one tile to 20.3 GB/s at 512 tiles.</desc>
+<desc id="d">Line chart: output rate grows from 0.13 GB/s at one tile to 22.7 GB/s at 512 tiles.</desc>
 <style>
 .bg{fill:#0d1117}.p{fill:#f0efec}.s{fill:#c3c2b7}.m{fill:#898781}
 .grid{stroke:#2c2c2a;stroke-width:1}.axis{stroke:#383835;stroke-width:1}
@@ -15,27 +15,29 @@
 <text x="16.0" y="43.0" class="s" font-size="12" font-weight="400" text-anchor="start">GB/s of output, kernel time, first n tiles of mozilla on an RX 6650 XT</text>
 <line x1="56.0" y1="290.0" x2="690.0" y2="290.0" class="grid"/>
 <text x="48.0" y="294.0" class="m" font-size="11" font-weight="400" text-anchor="end">0</text>
-<line x1="56.0" y1="235.0" x2="690.0" y2="235.0" class="grid"/>
-<text x="48.0" y="239.0" class="m" font-size="11" font-weight="400" text-anchor="end">5</text>
-<line x1="56.0" y1="180.0" x2="690.0" y2="180.0" class="grid"/>
-<text x="48.0" y="184.0" class="m" font-size="11" font-weight="400" text-anchor="end">10</text>
-<line x1="56.0" y1="125.0" x2="690.0" y2="125.0" class="grid"/>
-<text x="48.0" y="129.0" class="m" font-size="11" font-weight="400" text-anchor="end">15</text>
+<line x1="56.0" y1="246.0" x2="690.0" y2="246.0" class="grid"/>
+<text x="48.0" y="250.0" class="m" font-size="11" font-weight="400" text-anchor="end">5</text>
+<line x1="56.0" y1="202.0" x2="690.0" y2="202.0" class="grid"/>
+<text x="48.0" y="206.0" class="m" font-size="11" font-weight="400" text-anchor="end">10</text>
+<line x1="56.0" y1="158.0" x2="690.0" y2="158.0" class="grid"/>
+<text x="48.0" y="162.0" class="m" font-size="11" font-weight="400" text-anchor="end">15</text>
+<line x1="56.0" y1="114.0" x2="690.0" y2="114.0" class="grid"/>
+<text x="48.0" y="118.0" class="m" font-size="11" font-weight="400" text-anchor="end">20</text>
 <line x1="56.0" y1="70.0" x2="690.0" y2="70.0" class="grid"/>
-<text x="48.0" y="74.0" class="m" font-size="11" font-weight="400" text-anchor="end">20</text>
-<polyline points="56.0,288.7 267.3,281.5 408.2,256.0 549.1,204.2 690.0,66.7" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" class="l1"/>
-<circle cx="56.0" cy="288.7" r="5" class="c1 ring"><title>1 tiles: 0.12 GB/s, 0.56 ms</title></circle>
+<text x="48.0" y="74.0" class="m" font-size="11" font-weight="400" text-anchor="end">25</text>
+<polyline points="56.0,288.9 267.3,283.0 408.2,262.0 549.1,213.1 690.0,90.5" fill="none" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" class="l1"/>
+<circle cx="56.0" cy="288.9" r="5" class="c1 ring"><title>1 tiles: 0.13 GB/s, 0.52 ms</title></circle>
 <text x="56.0" y="308.0" class="m" font-size="11" font-weight="400" text-anchor="middle">1</text>
-<circle cx="267.3" cy="281.5" r="5" class="c1 ring"><title>8 tiles: 0.77 GB/s, 0.68 ms</title></circle>
+<circle cx="267.3" cy="283.0" r="5" class="c1 ring"><title>8 tiles: 0.79 GB/s, 0.66 ms</title></circle>
 <text x="267.3" y="308.0" class="m" font-size="11" font-weight="400" text-anchor="middle">8</text>
-<circle cx="408.2" cy="256.0" r="5" class="c1 ring"><title>32 tiles: 3.09 GB/s, 0.68 ms</title></circle>
+<circle cx="408.2" cy="262.0" r="5" class="c1 ring"><title>32 tiles: 3.18 GB/s, 0.66 ms</title></circle>
 <text x="408.2" y="308.0" class="m" font-size="11" font-weight="400" text-anchor="middle">32</text>
-<circle cx="549.1" cy="204.2" r="5" class="c1 ring"><title>128 tiles: 7.8 GB/s, 1.08 ms</title></circle>
+<circle cx="549.1" cy="213.1" r="5" class="c1 ring"><title>128 tiles: 8.74 GB/s, 0.96 ms</title></circle>
 <text x="549.1" y="308.0" class="m" font-size="11" font-weight="400" text-anchor="middle">128</text>
-<circle cx="690.0" cy="66.7" r="5" class="c1 ring"><title>512 tiles: 20.3 GB/s, 1.65 ms</title></circle>
+<circle cx="690.0" cy="90.5" r="5" class="c1 ring"><title>512 tiles: 22.67 GB/s, 1.48 ms</title></circle>
 <text x="690.0" y="308.0" class="m" font-size="11" font-weight="400" text-anchor="middle">512</text>
-<text x="64.0" y="274.7" class="p" font-size="12" font-weight="400" text-anchor="start">0.12 GB/s</text>
-<text x="700.0" y="70.7" class="p" font-size="12" font-weight="400" text-anchor="start">20.3 GB/s</text>
+<text x="64.0" y="274.9" class="p" font-size="12" font-weight="400" text-anchor="start">0.13 GB/s</text>
+<text x="700.0" y="94.5" class="p" font-size="12" font-weight="400" text-anchor="start">22.7 GB/s</text>
 <line x1="56.0" y1="290.0" x2="690.0" y2="290.0" class="axis"/>
 <text x="373.0" y="330.0" class="s" font-size="12" font-weight="400" text-anchor="middle">tiles in one dispatch (64 KB each)</text>
 </svg>

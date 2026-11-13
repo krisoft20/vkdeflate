@@ -1,20 +1,20 @@
 stream,tiles,khronos_ms,vkdeflate_ms
-dickens tile,1,1.70,0.57
-x-ray tile,1,2.50,1.16
-terrain_albedo tile,1,0.94,0.84
+dickens tile,1,1.70,0.52
+x-ray tile,1,2.50,0.99
+terrain_albedo tile,1,0.94,0.77
 provinces.bin tile,1,0.17,0.03
-mozilla first 128,128,1.79,1.08
-dickens,156,2.65,0.68
-x-ray,130,3.48,1.25
-xml,82,1.38,0.62
-nci,512,1.19,0.73
-osdb,154,1.46,0.72
-mozilla,782,3.52,2.27
-webster,633,3.48,1.82
-skin.tex,705,2.41,1.41
-human.portrait,848,4.38,2.75
-terrain_albedo.tex,598,2.77,1.74
-climate.bin,98,2.06,1.19
-provinces.bin,3126,4.50,2.43
-silesia first 2048,2048,7.29,4.24
+mozilla first 128,128,1.79,0.96
+dickens,156,2.64,0.58
+x-ray,130,3.48,1.04
+xml,82,1.38,0.57
+nci,512,1.16,0.69
+osdb,154,1.46,0.65
+mozilla,782,3.52,1.93
+webster,633,3.23,1.63
+skin.tex,705,2.40,1.17
+human.portrait,848,4.29,2.45
+terrain_albedo.tex,598,2.77,1.58
+climate.bin,98,2.06,1.09
+provinces.bin,3126,4.40,2.25
+silesia first 2048,2048,7.20,3.77
 zeros 32 MB,512,0.24,0.07

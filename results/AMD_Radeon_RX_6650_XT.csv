@@ -1,13 +1,13 @@
 gpu,driver,stream,tiles,out_bytes,cpu1_ms,vkdeflate_ms,khronos_ms,vkdeflate_ok,khronos_ok
-AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),dickens.l6,156,10192446,86.76,0.680,2.648,1,1
-AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),mozilla.l6,782,51220480,396.48,2.277,3.520,1,1
-AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),mr.l6,153,9970564,73.98,0.843,2.610,1,1
-AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),nci.l6,512,33553445,91.51,0.734,1.187,1,1
-AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),ooffice.l6,94,6152192,63.90,1.384,2.398,1,1
-AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),osdb.l6,154,10085684,71.77,0.721,1.458,1,1
-AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),reymont.l6,102,6627202,48.78,0.650,1.748,1,1
-AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),samba.l6,330,21606400,118.15,0.763,2.000,1,1
-AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),sao.l6,111,7251944,87.53,1.172,2.225,1,1
-AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),webster.l6,633,41458703,293.28,1.817,3.491,1,1
-AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),x-ray.l6,130,8474240,103.33,1.255,3.465,1,1
-AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),xml.l6,82,5345280,19.51,0.618,1.378,1,1
+AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),dickens.l6,156,10192446,91.81,0.585,2.641,1,1
+AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),mozilla.l6,782,51220480,390.36,1.954,3.460,1,1
+AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),mr.l6,153,9970564,72.00,0.694,2.614,1,1
+AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),nci.l6,512,33553445,96.85,0.692,1.163,1,1
+AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),ooffice.l6,94,6152192,63.17,1.270,2.392,1,1
+AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),osdb.l6,154,10085684,71.04,0.648,1.459,1,1
+AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),reymont.l6,102,6627202,45.23,0.625,1.749,1,1
+AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),samba.l6,330,21606400,119.78,0.705,2.007,1,1
+AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),sao.l6,111,7251944,86.60,0.995,2.222,1,1
+AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),webster.l6,633,41458703,303.33,1.810,3.326,1,1
+AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),x-ray.l6,130,8474240,109.91,1.045,3.482,1,1
+AMD Radeon RX 6650 XT,AMD proprietary driver 26.10.1 (AMD proprietary shader compiler),xml.l6,82,5345280,24.04,0.570,1.377,1,1

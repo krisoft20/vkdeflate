@@ -5,6 +5,57 @@ RX 9070 XT. Kernel time in ms
 on the GPU, best of several rounds, unless a row says otherwise. The machine was shared, so times move by 10 %
 between sessions; comparisons inside one table were run interleaved.
 
+## Fourth pass
+
+From the profiler's instruction timing on x-ray, 256 tiles: a round is about 435 instructions, 39 of them
+branches. A branch or a scalar compare costs about ten plain instructions; waits for memory are 14 % of the time.
+Each change against the previous one, `bench` interleaved, best of three, twelve Silesia streams.
+
+| change | result | kept |
+|---|---|---|
+| short-copy loads and stores under nested tests instead of a chain of 13 | x-ray tile 1.15 to 1.09, sum -1.3 % | yes |
+| the round's literal stored once, after the copies | sum -4.4 % | yes |
+| ring store without a branch (index of a spare slot when outside the window) | sum -1.8 % | yes |
+| short-copy loads issued before the refill and the prefix sum | sum -3.4 %, single tiles flat | yes |
+| all-literal round tried in every block | +3 to +5 % | no |
+| two literals per lane in one round | +2 to +4 % | no |
+| literal stores removed (wrong output) | x-ray tile 1.15 to 1.11: stores are not the cost | |
+
+| | before | after |
+|---|---|---|
+| 46 streams, sum of kernel ms | 45.61 | 40.68 |
+| per stream | | -17.6 to 0 %, median -10.2 % |
+| ratio to the Khronos layer, lowest, median, highest | 1.51, 2.12, 4.24 | 1.66, 2.33, 4.85 |
+| vector registers | 70 | 71 |
+| branches in the capture | 231 844 | 141 000 |
+
+The tables under "Against the Khronos layer" are from the third pass.
+
+RX 9070 XT, the same kernel, a friend's machine: the twelve Silesia streams 6 to 10 % faster than the third pass,
+ratio to the layer 1.47 to 2.94, median 1.84. One tile, ms:
+
+| tile | RX 6650 XT | RX 9070 XT |
+|---|---|---|
+| dickens | 0.52 | 0.64 |
+| x-ray | 0.99 | 1.22 |
+| mozilla | 0.52 | 0.64 |
+| webster | 0.56 | 0.73 |
+
+Time is flat up to about 256 tiles there and shared-memory padding up to 2048 bytes costs nothing, so the card is
+not full. From the instruction timing of x-ray, 256 tiles, per round:
+
+| | RX 6650 XT | RX 9070 XT |
+|---|---|---|
+| clock cycles | 2342 | 2730 |
+| vector and scalar instructions | 361 | 385 |
+| instructions followed by a gap of 4 cycles or more | 154 | 209 |
+| time in memory waits over 80 cycles | 16 % | 0 % |
+
+Where the 2705 cycles of a round go on the RX 9070 XT: 45 % in gaps of 4 cycles or more with no dependency marker
+before them (scalar mask logic, compares that write a mask, `v_readfirstlane`, selects), 25 % in such gaps right
+after an `s_delay_alu` marker, 18 % in waits and branches, 12 % in the 359 instructions under 4 cycles.
+The RX 6650 XT column is from the capture before the last change of this pass.
+
 ## Third pass
 
 `words[7]` and `pat_t q` initialised where declared: LLPC carried them through every loop.
@@ -89,9 +140,9 @@ First tile of each stream, current kernel; first pass in brackets.
 
 | tile | rounds | ms | us per round |
 |---|---|---|---|
-| dickens | 753 | 0.57 (0.82) | 0.76 |
-| x-ray | 1467 | 1.16 (1.26) | 0.79 |
-| terrain_albedo.tex | 2007 | 0.84 (0.94) | 0.42 |
+| dickens | 753 | 0.52 (0.82) | 0.69 |
+| x-ray | 1467 | 0.99 (1.26) | 0.67 |
+| terrain_albedo.tex | 2007 | 0.77 (0.94) | 0.38 |
 
 Zeros, 32 MB in 512 tiles: 0.07 ms (450 GB/s of output).
 
@@ -101,11 +152,11 @@ First n tiles of mozilla, current kernel; first pass in brackets.
 
 | tiles | ms | GB/s |
 |---|---|---|
-| 1 | 0.56 (0.88) | 0.12 |
-| 8 | 0.68 (1.04) | 0.8 |
-| 32 | 0.68 (1.16) | 3.1 |
-| 128 | 1.08 (1.81) | 7.8 |
-| 512 | 1.65 (4.48) | 20.3 |
+| 1 | 0.52 (0.88) | 0.13 |
+| 8 | 0.66 (1.04) | 0.8 |
+| 32 | 0.66 (1.16) | 3.2 |
+| 128 | 0.96 (1.81) | 8.7 |
+| 512 | 1.48 (4.48) | 22.7 |
 
 ## Waves per SIMD
 
@@ -231,16 +282,16 @@ Big texture dispatches gained nothing: surfaces 1.19x, human.portrait 1.25x, ter
 ## CPU and end to end
 
 MB/s of output for the CPU, ms for the GPU. Reference = NVIDIA's libdeflate fork. End to end = upload, kernel,
-download into host memory. GPU columns from the second pass, CPU columns from the first.
+download into host memory. GPU columns from the fourth pass, CPU columns from the first.
 
 | stream | MB | CPU, 1 thread | CPU, 6 threads | reference, 1 thread | GPU kernel | GPU end to end |
 |---|---|---|---|---|---|---|
-| mozilla | 51.2 | 167 | 817 | 347 | 2.27 | 12.8 |
-| webster | 41.5 | 184 | 850 | 333 | 1.82 | 10.1 |
-| provinces.bin | 204.8 | 823 | 4200 | 2300 | 2.43 | 34 |
-| skin.tex | 46.1 | 240 | 1200 | 675 | 1.41 | 10.1 |
-| human.portrait | 55.6 | 189 | 919 | 376 | 2.75 | 13.6 |
-| terrain_albedo.tex | 39.1 | 87 | 403 | 266 | 1.74 | 13.5 |
+| mozilla | 51.2 | 167 | 817 | 347 | 1.93 | 13.0 |
+| webster | 41.5 | 184 | 850 | 333 | 1.63 | 10.4 |
+| provinces.bin | 204.8 | 823 | 4200 | 2300 | 2.25 | 32 |
+| skin.tex | 46.1 | 240 | 1200 | 675 | 1.17 | 9.6 |
+| human.portrait | 55.6 | 189 | 919 | 376 | 2.45 | 14.3 |
+| terrain_albedo.tex | 39.1 | 87 | 403 | 266 | 1.58 | 13.7 |
 
 Submit to fence minus kernel: 0.12 ms for one tile.
 

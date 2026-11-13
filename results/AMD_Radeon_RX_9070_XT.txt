@@ -1,0 +1,12 @@
+gpu: AMD Radeon RX 9070 XT
+driver: AMD proprietary driver 26.10.1 (LLPC)
+vulkan: 1.4.359
+compute units: 64, simds per unit 2, waves per simd 16, wave size 64
+vector registers: 1536 per simd, 24 to 256 per wave in steps of 24
+subgroup: 32, chosen through subgroup size control
+pipelines: 2, runs padded by 4608 bytes
+compiler numUsedVgprs: 95
+compiler numUsedSgprs: 69
+compiler ldsSizePerLocalWorkGroup: 3072
+compiler ldsUsageSizeInBytes: 3072
+compiler scratchMemUsageInBytes: 0

@@ -25,11 +25,12 @@ host library that decode the same streams on AMD, Intel and anything else with V
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/rates-dark.svg">
-  <img src="docs/img/rates.svg" alt="Decode rate in GB/s per card: vkdeflate 13.2 and 15.0, Khronos layer 5.9 and 8.4, VolcanStorage shader 2.9 on the RX 6650 XT">
+  <img src="docs/img/rates.svg" alt="Decode rate in GB/s per card: vkdeflate 14.7 and 15.9, Khronos layer 5.9 and 8.4, VolcanStorage shader 2.9 on the RX 6650 XT">
 </picture>
 
 On each card every decoder got the same compressed data. The Khronos layer is Khronos's open
-implementation, with NVIDIA's shaders. On all 46 test streams vkdeflate is 1.56x to 4.2x faster on the RX 6650 XT and 1.19x to 2.8x on the RX 9070 XT.
+implementation, with NVIDIA's shaders. On all 46 test streams vkdeflate is 1.66x to 4.8x faster on the RX 6650 XT.
+On the RX 9070 XT, measured on the twelve Silesia streams, it is 1.47x to 2.9x faster.
 VolcanStorage is a GLSL port of Microsoft's reference shader. As shipped it does not finish on the
 RX 6650 XT, so it was measured after four fixes ([notebook](docs/notebook.md#volcanstorage)).
 How this was measured, and where it does not hold: [the write-up](docs/blog.md).
@@ -200,8 +201,8 @@ decoded byte against the CPU decoder. Results so far, geometric mean of the kern
 <!-- cards:begin -->
 | GPU | driver | streams | vkdeflate, GB/s | Khronos layer, GB/s | vkdeflate / layer |
 |---|---|---|---|---|---|
-| AMD Radeon RX 6650 XT | AMD proprietary driver 26.10.1 (AMD proprietary shader compiler) | 12 | 13.2 | 5.9 | 2.2× |
-| AMD Radeon RX 9070 XT | AMD proprietary driver 26.10.1 (LLPC) | 12 | 15.0 | 8.4 | 1.8× |
+| AMD Radeon RX 6650 XT | AMD proprietary driver 26.10.1 (AMD proprietary shader compiler) | 12 | 14.7 | 5.9 | 2.5× |
+| AMD Radeon RX 9070 XT | AMD proprietary driver 26.10.1 (LLPC) | 12 | 15.9 | 8.4 | 1.9× |
 <!-- cards:end -->
 
 Per stream on the RX 6650 XT:
@@ -220,10 +221,11 @@ A card that is not in this table is the most useful thing you can add: open a pu
   Intel yet.
 - The rates are kernel time on the GPU. Into host memory the PCIe copy caps a stream at 3-6 GB/s; into GPU memory
   only the compressed bytes cross the bus.
-- A dispatch of fewer than about 100 tiles (6 MB) costs 0.6 to 1 ms whatever its size. Batch streams into one
+- A dispatch of fewer than about 100 tiles (6 MB) costs 0.5 to 1 ms whatever its size. Batch streams into one
   command buffer.
-- On RDNA 4 the lead over the Khronos layer is smaller (1.8x on an RX 9070 XT, 2.2x on an RX 6650 XT). The cause
-  is not found. Vector registers were ruled out: halving them changed nothing there. Volunteers wanted:
+- On RDNA 4 the lead over the Khronos layer is smaller (1.9x on an RX 9070 XT, 2.5x on an RX 6650 XT). One tile
+  is decoded by one wave, and a wave takes 23 to 30 % longer per tile on the RX 9070 XT. The card has room to
+  spare, so a dispatch there takes as long as its slowest tile. Volunteers wanted:
   `bench.cmd -khr` and the CSV, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Subgroups narrower than 32 lanes (Mali, PowerVR, software renderers such as llvmpipe) are not supported.
 - On Linux the build and the CPU tests pass (gcc 13, Ubuntu 24.04 under WSL); no Linux GPU has run the kernel yet.
