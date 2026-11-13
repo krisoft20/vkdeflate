@@ -4,7 +4,7 @@ vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO krisoft20/vkdeflate
     REF "v${VERSION}"
-    SHA512 0
+    SHA512 7ffd18913cdcd0e72c99797107df32d43a2f6ec8d49d0875cee54e10c2a8050bb313cda6de1f5ded170ae56f3b9dbbbaefd6b36f7598b6893a6dff4613d5aace
     HEAD_REF main
 )
 
