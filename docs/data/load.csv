@@ -1,0 +1,6 @@
+case,kind,ms
+"CPU decoder, 12 threads, plus upload",cpu,258.2
+"load(), bytes in memory",gpu,17.6
+"load(), cached files",gpu,20.1
+"load(), files not in the OS cache, NVMe",gpu,60.1
+"load(), files not in the OS cache, SATA",gpu,167.7

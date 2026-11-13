@@ -281,6 +281,30 @@ def chart_cpu_gpu():
             'Grouped bars: GPU kernel, GPU end to end and CPU six threads in GB/s for six streams.', 'GB/s', label_first=True)
 
 
+def chart_load():
+    data = rows('docs/data/load.csv')
+    if not data:
+        return
+    left, right, top, pitch, bh = 290, 80, 76, 34, 18
+    tk = ticks(max(float(r['ms']) for r in data))
+    scale = (W - left - right) / tk[-1]
+    s = Svg(top + pitch * len(data) + 34, '212 MB into a GPU buffer: 18 to 168 ms with load(), 258 ms on the CPU',
+            'twelve Silesia streams in one call, ms, best of ten; RX 6650 XT, Ryzen 5 5600X, NVMe and SATA drives')
+    base = top + pitch * len(data)
+    for t in tk:
+        x = left + t * scale
+        s.line(x, top - 8, x, base, 'grid')
+        s.text(x, base + 16, num(t, 1) + ' ms', 'm', 11, 'middle')
+    for i, r in enumerate(data):
+        y = top + i * pitch
+        v = float(r['ms'])
+        s.text(left - 10, y + bh - 4, r['case'], 's', 12, 'end')
+        s.bar_h(left, left + v * scale, y, bh, 'cg' if r['kind'] == 'cpu' else 'c1', '%s: %s ms' % (r['case'], num(v, 1)))
+        s.text(left + v * scale + 8, y + bh - 4, '%s ms' % num(v, 1), 'p', 12)
+    s.line(left, top - 8, left, base, 'axis')
+    s.save('load.svg', 'Horizontal bars: ' + '; '.join('%s %s ms' % (r['case'], r['ms']) for r in data) + '.')
+
+
 def chart_format():
     s = Svg(250, 'A GDeflate stream: tiles of 64 KB, 32 bitstreams in each', 'tiles are independent of each other; inside a tile 32 bitstreams advance together')
     s.text(16, 84, 'stream', 's', 12)
@@ -410,6 +434,7 @@ def main():
     chart_residency()
     chart_lds()
     chart_cpu_gpu()
+    chart_load()
     chart_format()
     readme_table()
 

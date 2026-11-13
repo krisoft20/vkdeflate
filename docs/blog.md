@@ -145,6 +145,12 @@ as much as on my card. Large textures gained nothing: the kernel now needs 191 v
 fewer waves fit, and the layer is relatively faster there. Some large streams are 3-4 % slower there than with
 the previous version. I have no RDNA 4 card, so I cannot narrow this down or fix it.
 
+Later passes brought the registers there back to 94, and the time did not change. From the last test package: one
+wave takes 23 to 30 % longer per tile on the RX 9070 XT than on my card, and that card does not fill up before
+about 512 tiles (mine at about 128). Ten of the twelve Silesia streams have 512 tiles or fewer, so a dispatch there takes
+as long as its slowest tile. Taking the votes of a round together, where the profile had its gaps, made it 3 to
+8 % slower there.
+
 ## What I think
 
 **GDeflate compresses like zlib.** zstd and Oodle pack tighter. That difference in file size is what you pay for a
@@ -164,11 +170,21 @@ competes with rendering, and the DirectStorage titles that shipped with it show 
 ([Ratchet & Clank](https://www.tomshardware.com/news/directstorage-bug-destroys-frame-rates-in-ratchet-and-clank-rift-apart),
 [Spider-Man 2](https://pcgamer.com/hardware/graphics-cards/spider-man-2s-pc-launch-woes-are-woe-ier-than-you-think-as-it-looks-like-gpu-powered-directstorage-is-hobbling-performance)).
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="img/load-dark.svg">
+  <img src="img/load.svg" alt="Twelve Silesia streams, 212 MB, into a GPU buffer: load() 17.6 ms from memory, 20.1 ms from cached files, 60.1 ms from files not in the cache on NVMe, 167.7 ms on SATA; CPU decoder on 12 threads plus upload 258.2 ms">
+</picture>
+
+With `load()` the files end up decoded in a GPU buffer or image. The twelve Silesia streams in one call, 212 MB:
+17.6 ms from bytes in memory, 20.1 ms from cached files, 60.1 ms from files not in the OS cache on an NVMe drive
+and 167.7 ms on a SATA drive. The CPU decoder on 12 threads plus the upload of its output: 258 ms. With files not
+in the cache most of the time is the read itself: the 71 MB alone take 49 ms on the NVMe drive and 149 ms on the
+SATA drive.
+
 **For my own game it saves tens of milliseconds per large asset.**
 
 ## If you want to help
 
-An RDNA 4 card is what this needs most right now: the kernel regressed there and I cannot measure it myself.
-It has run on two AMD GPUs. `bench.cmd` downloads the Silesia corpus, compresses it, decodes it on your card and writes a
-CSV; `bench.cmd -khr` adds the Khronos layer for comparison. A result from an NVIDIA or Intel card, or a failure,
-is worth more than anything else you could send.
+A result from an NVIDIA or Intel card, or a failure, is what this needs most: it has run on two AMD GPUs only.
+`bench.cmd` downloads the Silesia corpus, compresses it, decodes it on your card and writes a CSV; `bench.cmd -khr`
+adds the Khronos layer for comparison.
