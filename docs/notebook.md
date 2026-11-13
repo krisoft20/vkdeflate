@@ -5,6 +5,31 @@ RX 9070 XT. Kernel time in ms
 on the GPU, best of several rounds, unless a row says otherwise. The machine was shared, so times move by 10 %
 between sessions; comparisons inside one table were run interleaved.
 
+## RX 9070 XT, last package
+
+A friend's machine, a package of six kernel variants, best of three rounds, variants alternating, twelve Silesia streams. Every output
+byte-exact; 1200 broken copies fuzzed, CPU and GPU agree on all of them.
+
+| against the current kernel (literal rounds on under LLPC) | median |
+|---|---|
+| literal rounds off | -1.1 %; reymont and samba +5 to +6 % |
+| the same kernel again | -0.3 %; single streams up to 3.6 % apart |
+| the votes of a round taken as ballots at its start | +2.7 % |
+| one vote instead of two before the all-literal round | +5.6 % |
+| both | +7.8 %; dickens, mr, sao, x-ray about +10 % |
+
+`s_delay_alu` in the ISA: 1294, with both changes 1287. The gaps do not come from the votes.
+
+One x-ray tile repeated, ms:
+
+| tiles | 1 | 8 | 32 | 128 | 256 | 512 | 1024 | 2048 |
+|---|---|---|---|---|---|---|---|---|
+| RX 6650 XT | 1.00 | 1.00 | 1.00 | 1.05 | 1.19 | 1.70 | 4.02 | 5.99 |
+| RX 9070 XT | 1.23 | 1.20 | 1.18 | 1.14 | 1.19 | 1.27 | 1.68 | 3.11 |
+
+Flat up to 512 tiles there, so ten of the twelve Silesia streams take as long as their slowest tile. Full, the
+RX 9070 XT does 1.9 times the work of the RX 6650 XT.
+
 ## Fourth pass
 
 From the profiler's instruction timing on x-ray, 256 tiles: a round is about 435 instructions, 39 of them
