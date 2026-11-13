@@ -19,6 +19,7 @@ layout(constant_id = 2) const uint RING = 512;
 layout(constant_id = 3) const uint PAD = 0;
 layout(constant_id = 4) const uint LIT_ROOT = 9;
 layout(constant_id = 5) const uint DIST_ROOT = 7;
+layout(constant_id = 6) const uint LITS = 0;
 layout(local_size_x_id = 0) in;
 
 struct tile_t {
@@ -155,8 +156,8 @@ uint ring_get(uint x) {
 }
 
 void ring_set(uint x, uint v) {
-    if (x >= g_win && g_mirror && RING != 0u && EXPERIMENT != 22)
-        lds_ring[x & (RING - 1u)] = uint8_t(v);
+    if (g_mirror && RING != 0u && EXPERIMENT != 22)
+        lds_ring[x >= g_win ? x & (RING - 1u) : RING] = uint8_t(v);
 }
 
 uint load_packet(reader_t r, uint idx) {
@@ -529,35 +530,68 @@ void ring_any(uint x, uint lim, uint v) {
     lds_ring[ri] = uint8_t(v);
 }
 
-void copy_own_ovr(uint dst, uint cp, uint cl, uint cd, uint longest, uint lim) {
+uint ovr_word(uint a, uint b, uint shift) {
+    return shift != 0u ? (a >> shift) | (b << (32u - shift)) : a;
+}
+
+void ovr_store(uint dst, uint i, uint v, uint lim) {
+    out_set(dst + i + 3u, v >> 24);
+    out_set(dst + i + 2u, (v >> 16) & 255u);
+    out_set(dst + i + 1u, (v >> 8) & 255u);
+    out_set(dst + i, v & 255u);
+    if (g_mirror && RING != 0u) {
+        ring_any(i + 3u, lim, v >> 24);
+        ring_any(i + 2u, lim, (v >> 16) & 255u);
+        ring_any(i + 1u, lim, (v >> 8) & 255u);
+        ring_any(i, lim, v & 255u);
+    }
+}
+
+struct ovr_t {
+    uint w0, w1, w2, w3, w4, w5, w6;
+    uint shift;
+};
+
+ovr_t ovr_load(uint dst, uint cp, uint cl, uint cd, uint longest) {
+    ovr_t o = ovr_t(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
     if (cl == 0u)
-        return;
+        return o;
     uint src = dst + cp - cd;
     uint last = (src + cl - 1u) >> 2;
-    uint shift = (src & 3u) * 8u;
-    uint words[7] = uint[7](0u, 0u, 0u, 0u, 0u, 0u, 0u);
-    [[unroll]] for (uint i = 0; i < 7; i++) {
-        if (i * 4u < longest + 4u)
-            words[i] = out_word(min((src >> 2) + i, last));
-    }
-    [[unroll]] for (int k = 5; k >= 0; k--) {
-        if (uint(k) * 4u >= longest)
-            continue;
-        uint v = words[k];
-        if (shift != 0u)
-            v = (v >> shift) | (words[k + 1] << (32u - shift));
-        uint i = cp + uint(k) * 4u;
-        out_set(dst + i + 3u, v >> 24);
-        out_set(dst + i + 2u, (v >> 16) & 255u);
-        out_set(dst + i + 1u, (v >> 8) & 255u);
-        out_set(dst + i, v & 255u);
-        if (g_mirror && RING != 0u) {
-            ring_any(i + 3u, lim, v >> 24);
-            ring_any(i + 2u, lim, (v >> 16) & 255u);
-            ring_any(i + 1u, lim, (v >> 8) & 255u);
-            ring_any(i, lim, v & 255u);
+    uint base = src >> 2;
+    o.shift = (src & 3u) * 8u;
+    o.w0 = out_word(min(base, last));
+    o.w1 = out_word(min(base + 1u, last));
+    if (longest > 4u) {
+        o.w2 = out_word(min(base + 2u, last));
+        if (longest > 8u) {
+            o.w3 = out_word(min(base + 3u, last));
+            if (longest > 12u)
+                o.w4 = out_word(min(base + 4u, last));
+            if (longest > 16u)
+                o.w5 = out_word(min(base + 5u, last));
+            if (longest > 20u)
+                o.w6 = out_word(min(base + 6u, last));
         }
     }
+    return o;
+}
+
+void ovr_stores(uint dst, uint cp, uint cl, uint longest, uint lim, ovr_t o) {
+    if (cl == 0u)
+        return;
+    if (longest > 8u) {
+        if (longest > 20u)
+            ovr_store(dst, cp + 20u, ovr_word(o.w5, o.w6, o.shift), lim);
+        if (longest > 16u)
+            ovr_store(dst, cp + 16u, ovr_word(o.w4, o.w5, o.shift), lim);
+        if (longest > 12u)
+            ovr_store(dst, cp + 12u, ovr_word(o.w3, o.w4, o.shift), lim);
+        ovr_store(dst, cp + 8u, ovr_word(o.w2, o.w3, o.shift), lim);
+    }
+    if (longest > 4u)
+        ovr_store(dst, cp + 4u, ovr_word(o.w1, o.w2, o.shift), lim);
+    ovr_store(dst, cp, ovr_word(o.w0, o.w1, o.shift), lim);
 }
 
 struct pat_t {
@@ -762,7 +796,7 @@ uint huffman_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout 
         uint fw = 0u;
         if (fetch)
             fw = load_packet(r, r.wbase + lane);
-        if (fast && !final_round && !subgroupAny(pend != 0u)) {
+        if ((fast || LITS != 0u) && !final_round && !subgroupAny(pend != 0u)) {
             uint e = half_get(TAB_LIT + (uint(l.buf) & ((1u << LIT_ROOT) - 1u)));
             uint flen = e >> 9;
             uint fsym = e & 511u;
@@ -812,10 +846,26 @@ uint huffman_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout 
             base = 3u;
         }
         uint val = base + ((uint(l.buf) >> len) & ((1u << ext) - 1u));
-        bool bad = len == 0u || (is_dist ? (sym >= 32u || dist_empty) : sym > 285u);
+        uint limit = is_dist ? (dist_empty ? 0u : 32u) : 286u;
+        bool bad = sym >= limit;
+
+        bool any_dist = subgroupAny(is_dist);
+        bool dep = false, shortm = false, early = false;
+        uint longest = 0u;
+        ovr_t ov = ovr_t(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+        if (any_dist) {
+            dep = is_dist && mpos - val + mlen > seg;
+            shortm = is_dist && !dep && mlen <= 24u && val <= mpos;
+            longest = subgroupMax(shortm ? mlen : 0u);
+            early = longest != 0u && pos + 24u <= size;
+            if (early)
+                ov = ovr_load(dst, mpos, shortm ? mlen : 0u, val, longest);
+        }
 
         uint eobmask = subgroupBallot(is_eob).x;
-        bool alive = is_dist || (!final_round && (eobmask == 0u || lane <= uint(findLSB(eobmask))));
+        bool alive = true;
+        if (eobmask != 0u || final_round)
+            alive = is_dist || (!final_round && lane <= uint(findLSB(eobmask)));
         bool fault = subgroupAny((bad && alive) || (is_dist && val > mpos));
         if (alive)
             eat(l, len + ext);
@@ -834,28 +884,16 @@ uint huffman_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout 
         }
         uint p = pos + off;
         g_win = pos + total >= RING ? pos + total - RING : 0u;
-        if (alive && is_lit) {
-            out_set(dst + p, sym);
-            ring_set(p, sym);
-        }
-
-        if (subgroupAny(is_dist)) {
+        if (any_dist) {
             store_fence();
             uint ring_lo = max(g_win, ring_from);
-            bool dep = is_dist && mpos - val + mlen > seg;
-            bool shortm = is_dist && !dep && mlen <= 24u;
-            uint longest = subgroupMax(shortm ? mlen : 0u);
-            if (longest != 0u && pos + 24u <= size) {
-                copy_own_ovr(dst, mpos, shortm ? mlen : 0u, val, longest, pos + total);
+            if (early) {
+                ovr_stores(dst, mpos, shortm ? mlen : 0u, longest, pos + total, ov);
                 longest = 0u;
                 subgroupBarrier();
                 if (plv) {
                     out_set(dst + plp, pls);
                     ring_set(plp, pls);
-                }
-                if (alive && is_lit) {
-                    out_set(dst + p, sym);
-                    ring_set(p, sym);
                 }
             }
             if (longest != 0u)
@@ -910,6 +948,10 @@ uint huffman_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout 
         plp = p;
         pls = sym;
         plv = alive && is_lit;
+        if (plv) {
+            out_set(dst + p, sym);
+            ring_set(p, sym);
+        }
         if (is_dist)
             pend = 0u;
         else if (alive && sym > 256u) {

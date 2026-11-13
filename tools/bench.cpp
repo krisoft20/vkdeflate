@@ -717,6 +717,10 @@ int main(int argc, char** argv) {
             layer_name = argv[++i];
         else if (s == "-regions")
             a.regions = true;
+        else if (s == "-v")
+            a.cfg.verbose = true;
+        else if (s == "-lits" && more)
+            a.cfg.literal_rounds = atoi(argv[++i]);
         else if (s[0] == '-') {
             printf("unknown argument %s\n", argv[i]);
             return 1;
@@ -725,7 +729,7 @@ int main(int argc, char** argv) {
     }
     if (a.files.empty()) {
         printf("usage: bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-ms N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct] [-regions]\n"
-               "       [-root N] [-droot N] [-ring N] [-pad N] [-x N] [-tile-count N]\n");
+               "       [-root N] [-droot N] [-ring N] [-pad N] [-x N] [-tile-count N] [-lits 0|1] [-v]\n");
         return 1;
     }
 

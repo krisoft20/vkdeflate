@@ -173,6 +173,7 @@ struct ctx_t {
     uint32_t runs_pad = 0;
     uint32_t lit_root = 9;
     uint32_t dist_root = 7;
+    int lits = -1;
     bool verbose = false;
     bool stats = false;
     std::string report;
@@ -225,11 +226,13 @@ static bool pick_subgroup(ctx_t& g, const config_t& cfg) {
     bool has_control = core13 || has_extension(g, subgroup_ext);
 
     VkPhysicalDeviceSubgroupSizeControlProperties psc = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES};
-    VkPhysicalDeviceVulkan11Properties p11 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES,
-                                              has_control ? &psc : nullptr};
+    VkPhysicalDeviceDriverProperties drv = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES, has_control ? &psc : nullptr};
+    VkPhysicalDeviceVulkan11Properties p11 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES, &drv};
     VkPhysicalDeviceProperties2 p2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &p11};
     g.f.vkGetPhysicalDeviceProperties2(g.phys, &p2);
     g.name = p2.properties.deviceName;
+    if (g.lits < 0)
+        g.lits = drv.driverID == VK_DRIVER_ID_AMD_PROPRIETARY && strstr(drv.driverInfo, "LLPC") ? 1 : 0;
     g.ts_period = p2.properties.limits.timestampPeriod;
     constexpr VkSubgroupFeatureFlags need_ops = VK_SUBGROUP_FEATURE_BASIC_BIT | VK_SUBGROUP_FEATURE_BALLOT_BIT |
                                                 VK_SUBGROUP_FEATURE_ARITHMETIC_BIT | VK_SUBGROUP_FEATURE_SHUFFLE_BIT;
@@ -482,9 +485,9 @@ static bool make_pipeline(ctx_t& g) {
     if ((r = g.f.vkCreatePipelineLayout(g.dev, &plci, nullptr, &g.layout)) != VK_SUCCESS)
         return fail(g, "vkCreatePipelineLayout", r);
 
-    uint32_t spec_data[6] = {g.subgroup, g.experiment, g.ring, g.pad, g.lit_root, g.dist_root};
-    VkSpecializationMapEntry spec_map[6] = {{0, 0, 4}, {1, 4, 4}, {2, 8, 4}, {3, 12, 4}, {4, 16, 4}, {5, 20, 4}};
-    VkSpecializationInfo spec = {6, spec_map, sizeof(spec_data), spec_data};
+    uint32_t spec_data[7] = {g.subgroup, g.experiment, g.ring, g.pad, g.lit_root, g.dist_root, g.lits > 0 ? 1u : 0u};
+    VkSpecializationMapEntry spec_map[7] = {{0, 0, 4}, {1, 4, 4}, {2, 8, 4}, {3, 12, 4}, {4, 16, 4}, {5, 20, 4}, {6, 24, 4}};
+    VkSpecializationInfo spec = {7, spec_map, sizeof(spec_data), spec_data};
     VkPipelineShaderStageRequiredSubgroupSizeCreateInfo rss = {
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO};
     rss.requiredSubgroupSize = g.subgroup;
@@ -693,6 +696,7 @@ ctx_t* create(const config_t& cfg, std::string& err) {
     g->runs_pad = cfg.runs_pad_bytes;
     g->lit_root = cfg.lit_root;
     g->dist_root = cfg.dist_root;
+    g->lits = cfg.literal_rounds;
     if (!init_device(*g, cfg) || !make_pipeline(*g)) {
         err = g->err;
         destroy(g);
@@ -711,6 +715,7 @@ ctx_t* attach(VkInstance instance, VkPhysicalDevice phys, VkDevice dev, PFN_vkGe
     g->runs_pad = cfg.runs_pad_bytes;
     g->lit_root = cfg.lit_root;
     g->dist_root = cfg.dist_root;
+    g->lits = cfg.literal_rounds;
     g->instance = instance;
     g->phys = phys;
     g->dev = dev;
