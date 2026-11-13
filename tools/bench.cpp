@@ -13,6 +13,11 @@
 // count path (one dispatch for all tiles). -layer names another layer with the same extension. -csvdir names the file after the GPU. Exit code 0 only when
 // every output matches the CPU decoder.
 //
+// -load also times the path a game takes, file to device-local buffer, best of -load-rounds (10): load() from a
+// file just dropped from the OS cache, from a cached file and from bytes in memory, the file read without and
+// with the cache, record_load() on the host for the same three, the GPU time of what it records, and next to it
+// the CPU decoder on every thread plus the upload of its output.
+//
 // MIT License
 //
 // Copyright (c) 2026 krisoft20
@@ -38,6 +43,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define VK_NO_PROTOTYPES
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -45,6 +51,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #if defined(_WIN32)
@@ -53,6 +60,8 @@
 #include <windows.h>
 #else
 #include <dlfcn.h>
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 
 #include "gdeflate.h"
@@ -145,6 +154,27 @@ struct args_t {
     bool direct = false;
     bool layer = true;
     bool regions = false;
+    bool load = false;
+    int load_rounds = 10;
+    double idle_ms = 0;
+};
+
+struct load_row_t {
+    double read_ms = 1e30;
+    double cold_ms = 1e30;
+    double host_cold_ms = 1e30;
+    double host_ms = 1e30;
+    double host_mem_ms = 1e30;
+    double gpu_ms = 1e30;
+    double gpu_up_ms = 1e30;
+    double gpu_copy_ms = 1e30;
+    double load_cold_ms = 1e30;
+    double load_ms = 1e30;
+    double load_mem_ms = 1e30;
+    double cpu_mt_ms = 1e30;
+    double upload_ms = 1e30;
+    int threads = 0;
+    bool ok = false;
 };
 
 struct row_t {
@@ -156,7 +186,14 @@ struct row_t {
     double khr_ms = 0;
     bool vk_ok = false;
     bool khr_ok = false;
+    load_row_t ld;
 };
+
+using steady_t = std::chrono::steady_clock;
+
+static double ms_since(steady_t::time_point t0) {
+    return std::chrono::duration<double, std::milli>(steady_t::now() - t0).count();
+}
 
 static void die(const char* what, VkResult r = VK_SUCCESS) {
     if (r != VK_SUCCESS)
@@ -575,6 +612,8 @@ static bool run_file(const args_t& a, vkdeflate::ctx_t* ctx, const std::string& 
         if (round == 0)
             measured = std::chrono::steady_clock::now();
         bool khr_first = (round & 1) == 0;
+        if (a.idle_ms > 0)
+            std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(a.idle_ms));
         begin();
         vkCmdResetQueryPool(cmd, queries, 0, 4);
         fence_all();
@@ -635,6 +674,239 @@ static bool run_file(const args_t& a, vkdeflate::ctx_t* ctx, const std::string& 
     return row.vk_ok && row.khr_ok;
 }
 
+static double cold_read_ms(const std::string& path) {
+#if defined(_WIN32)
+    HANDLE h = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                           FILE_FLAG_NO_BUFFERING | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    if (h == INVALID_HANDLE_VALUE)
+        return -1;
+    constexpr DWORD chunk = 4u << 20;
+    void* buf = VirtualAlloc(nullptr, chunk, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    steady_t::time_point t0 = steady_t::now();
+    DWORD got = 0;
+    while (ReadFile(h, buf, chunk, &got, nullptr) && got == chunk) {
+    }
+    double ms = ms_since(t0);
+    VirtualFree(buf, 0, MEM_RELEASE);
+    CloseHandle(h);
+    return ms;
+#else
+    int fd = open(path.c_str(), O_RDONLY);
+    if (fd < 0)
+        return -1;
+    fdatasync(fd);
+    posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
+    std::vector<uint8_t> buf(4u << 20);
+    steady_t::time_point t0 = steady_t::now();
+    while (read(fd, buf.data(), buf.size()) > 0) {
+    }
+    double ms = ms_since(t0);
+    posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
+    close(fd);
+    return ms;
+#endif
+}
+
+static bool read_file(const std::string& path, std::vector<uint8_t>& bytes) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f)
+        return false;
+    fseek(f, 0, SEEK_END);
+    long end = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    bytes.resize(end > 0 ? (size_t)end : 0);
+    size_t got = bytes.empty() ? 0 : fread(bytes.data(), 1, bytes.size(), f);
+    fclose(f);
+    return got == bytes.size();
+}
+
+static bool cpu_decode_mt(const std::vector<uint8_t>& in, const gdeflate::stream_t& s, uint8_t* out, int threads) {
+    std::atomic<size_t> next(0);
+    std::atomic<bool> failed(false);
+    std::vector<std::thread> workers;
+    for (int w = 0; w < threads; w++)
+        workers.emplace_back([&] {
+            std::string why;
+            for (size_t i = next++; i < s.tiles.size() && !failed; i = next++) {
+                const gdeflate::tile_t& t = s.tiles[i];
+                if (!gdeflate::decode_tile(in.data() + t.src, t.csize, out + t.dst, t.size, why))
+                    failed = true;
+            }
+        });
+    for (std::thread& t : workers)
+        t.join();
+    return !failed;
+}
+
+static double upload_ms(const std::vector<uint8_t>& bytes, const buf_t& up, const buf_t& dst) {
+    steady_t::time_point t0 = steady_t::now();
+    memcpy(up.map, bytes.data(), bytes.size());
+    copy(up, dst, bytes.size());
+    return ms_since(t0);
+}
+
+static bool timed_record(vkdeflate::ctx_t* ctx, const std::vector<vkdeflate::load_t>& items, double& host_ms, double& gpu_ms,
+                         std::string& err) {
+    begin();
+    vkCmdResetQueryPool(cmd, queries, 0, 2);
+    fence_all();
+    vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queries, 0);
+    steady_t::time_point t0 = steady_t::now();
+    bool ok = vkdeflate::record_load(ctx, cmd, items.data(), (uint32_t)items.size(), err);
+    host_ms = ms_since(t0);
+    vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queries, 1);
+    fence_all();
+    submit_wait();
+    uint64_t ts[2] = {};
+    vkGetQueryPoolResults(dev, queries, 0, 2, sizeof(ts), ts, 8, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+    gpu_ms = (double)(ts[1] - ts[0]) * tick_ms;
+    return ok && vkdeflate::load_result(ctx, err);
+}
+
+static double gpu_copy_ms(const buf_t& from, const buf_t& to, VkDeviceSize size) {
+    begin();
+    vkCmdResetQueryPool(cmd, queries, 0, 2);
+    fence_all();
+    vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queries, 0);
+    VkBufferCopy c = {0, 0, size};
+    vkCmdCopyBuffer(cmd, from.buf, to.buf, 1, &c);
+    vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queries, 1);
+    fence_all();
+    submit_wait();
+    uint64_t ts[2] = {};
+    vkGetQueryPoolResults(dev, queries, 0, 2, sizeof(ts), ts, 8, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+    return (double)(ts[1] - ts[0]) * tick_ms;
+}
+
+static void keep_best(double& best, double v) {
+    best = std::min(best, v);
+}
+
+static bool timed_load(vkdeflate::ctx_t* ctx, const std::vector<vkdeflate::load_t>& items, double& ms, std::string& err) {
+    steady_t::time_point t0 = steady_t::now();
+    bool ok = vkdeflate::load(ctx, queue, family, items.data(), (uint32_t)items.size(), err);
+    ms = ms_since(t0);
+    return ok;
+}
+
+static bool loads_right(vkdeflate::ctx_t* ctx, const std::vector<vkdeflate::load_t>& items, const buf_t& dst, const buf_t& down,
+                        const std::vector<uint8_t>& ref, std::string& err) {
+    memset(down.map, 0, ref.size());
+    copy(down, dst, ref.size());
+    vkdeflate::trim(ctx);
+    if (!vkdeflate::load(ctx, queue, family, items.data(), (uint32_t)items.size(), err))
+        return false;
+    copy(dst, down, ref.size());
+    return same(down, ref);
+}
+
+struct piece_t {
+    std::string path;
+    std::vector<uint8_t> in;
+    gdeflate::stream_t s;
+    size_t at = 0;
+};
+
+static bool run_load(const args_t& a, vkdeflate::ctx_t* ctx, const std::vector<std::string>& paths, row_t& row) {
+    std::vector<piece_t> pieces(paths.size());
+    std::string err;
+    size_t total = 0, in_total = 0;
+    for (size_t i = 0; i < paths.size(); i++) {
+        piece_t& p = pieces[i];
+        p.path = paths[i];
+        if (!read_file(p.path, p.in) || !gdeflate::parse(p.in.data(), p.in.size(), p.s, err)) {
+            printf("[bench] %s: cant parse for -load %s\n", p.path.c_str(), err.c_str());
+            return false;
+        }
+        p.at = total;
+        total += (p.s.total + 255) / 256 * 256;
+        in_total += p.in.size();
+    }
+    std::vector<uint8_t> ref(total), mt(total);
+    for (piece_t& p : pieces)
+        if (!gdeflate::decompress(p.in.data(), p.in.size(), ref.data() + p.at, p.s.total, err)) {
+            printf("[bench] %s: cpu decoder: %s\n", p.path.c_str(), err.c_str());
+            return false;
+        }
+    load_row_t& r = row.ld;
+    r.threads = (int)std::max(1u, std::thread::hardware_concurrency());
+    buf_t up = make_buf(total, true);
+    buf_t dst = make_buf(total, false);
+    buf_t down = make_buf(total, true);
+    buf_t other = make_buf(total, false);
+    std::vector<vkdeflate::load_t> from_file(pieces.size()), from_mem(pieces.size());
+    for (size_t i = 0; i < pieces.size(); i++) {
+        from_file[i].path = pieces[i].path.c_str();
+        from_file[i].buffer = dst.buf;
+        from_file[i].buffer_offset = pieces[i].at;
+        from_mem[i].data = pieces[i].in.data();
+        from_mem[i].size = pieces[i].in.size();
+        from_mem[i].buffer = dst.buf;
+        from_mem[i].buffer_offset = pieces[i].at;
+    }
+    auto drop_all = [&] {
+        double ms = 0;
+        for (const piece_t& p : pieces)
+            ms += cold_read_ms(p.path);
+        return ms;
+    };
+
+    bool ok = true;
+    for (int round = -2; round < a.load_rounds && ok; round++) {
+        steady_t::time_point t0 = steady_t::now();
+        for (const piece_t& p : pieces)
+            ok = ok && cpu_decode_mt(p.in, p.s, mt.data() + p.at, r.threads);
+        double cpu = ms_since(t0);
+        double upl = upload_ms(mt, up, dst);
+        double gpu_up = gpu_copy_ms(up, dst, in_total);
+        double gpu_out = gpu_copy_ms(dst, other, total);
+        double cold = drop_all();
+        double host_cold = 0, host = 0, host_mem = 0, gpu = 0, gpu_mem = 0, load_cold = 0, whole = 0, whole_mem = 0;
+        ok = ok && timed_record(ctx, from_file, host_cold, gpu, err);
+        drop_all();
+        ok = ok && timed_load(ctx, from_file, load_cold, err);
+        std::vector<uint8_t> bytes;
+        t0 = steady_t::now();
+        for (const piece_t& p : pieces)
+            ok = ok && read_file(p.path, bytes);
+        double read = ms_since(t0);
+        ok = ok && timed_record(ctx, from_file, host, gpu_mem, err);
+        ok = ok && timed_record(ctx, from_mem, host_mem, gpu_mem, err);
+        ok = ok && timed_load(ctx, from_file, whole, err) && timed_load(ctx, from_mem, whole_mem, err);
+        if (round < 0)
+            continue;
+        keep_best(r.cpu_mt_ms, cpu);
+        keep_best(r.upload_ms, upl);
+        keep_best(r.gpu_up_ms, gpu_up);
+        keep_best(r.gpu_copy_ms, gpu_out);
+        keep_best(r.cold_ms, cold);
+        keep_best(r.host_cold_ms, host_cold);
+        keep_best(r.load_cold_ms, load_cold);
+        keep_best(r.read_ms, read);
+        keep_best(r.host_ms, host);
+        keep_best(r.host_mem_ms, host_mem);
+        keep_best(r.gpu_ms, std::min(gpu, gpu_mem));
+        keep_best(r.load_ms, whole);
+        keep_best(r.load_mem_ms, whole_mem);
+    }
+    if (!ok)
+        printf("[bench] %s: -load: %s\n", row.stream.c_str(), err.c_str());
+    r.ok = ok && mt == ref && loads_right(ctx, from_file, dst, down, ref, err) &&
+           loads_right(ctx, from_mem, dst, down, ref, err);
+
+    double mb = (double)total / 1e6;
+    printf("[bench] %-24s load cold %6.2f ms, warm %6.2f, from memory %6.2f (%.1f GB/s)  file uncached %6.2f, cached %6.2f"
+           "  record_load host cold %6.2f, warm %6.2f, from memory %6.2f, gpu %6.2f  cpu %d threads %7.2f + upload %6.2f  %s\n",
+           row.stream.c_str(), r.load_cold_ms, r.load_ms, r.load_mem_ms, mb / r.load_mem_ms, r.cold_ms, r.read_ms,
+           r.host_cold_ms, r.host_ms, r.host_mem_ms, r.gpu_ms, r.threads, r.cpu_mt_ms, r.upload_ms, r.ok ? "ok" : "FAIL");
+
+    free_buf(up);
+    free_buf(dst);
+    free_buf(down);
+    free_buf(other);
+    return r.ok;
+}
+
 static std::string file_name_for(const std::string& gpu) {
     std::string s;
     for (char c : gpu)
@@ -649,18 +921,31 @@ static std::string field(std::string s) {
     return s;
 }
 
-static bool write_csv(const std::string& path, const std::vector<row_t>& rows) {
+static void write_load(FILE* f, const load_row_t& r) {
+    fprintf(f, ",%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%.3f,%.3f,%d", r.load_cold_ms, r.load_ms,
+            r.load_mem_ms, r.cold_ms, r.read_ms, r.host_cold_ms, r.host_ms, r.host_mem_ms, r.gpu_ms, r.gpu_up_ms,
+            r.gpu_copy_ms, r.threads, r.cpu_mt_ms, r.upload_ms, r.ok ? 1 : 0);
+}
+
+static bool write_csv(const std::string& path, const std::vector<row_t>& rows, bool with_load) {
     FILE* f = fopen(path.c_str(), "w");
     if (!f)
         return false;
-    fprintf(f, "gpu,driver,stream,tiles,out_bytes,cpu1_ms,vkdeflate_ms,khronos_ms,vkdeflate_ok,khronos_ok\n");
+    fprintf(f, "gpu,driver,stream,tiles,out_bytes,cpu1_ms,vkdeflate_ms,khronos_ms,vkdeflate_ok,khronos_ok%s\n",
+            with_load ? ",load_cold_ms,load_ms,load_mem_ms,read_uncached_ms,read_cached_ms,record_host_cold_ms,"
+                        "record_host_ms,record_host_mem_ms,record_gpu_ms,gpu_upload_ms,gpu_copy_ms,cpu_threads,cpu_mt_ms,"
+                        "upload_ms,load_ok"
+                      : "");
     for (const row_t& r : rows) {
         fprintf(f, "%s,%s,%s,%u,%zu,%.2f,%.3f,", field(gpu_name).c_str(), field(driver_text).c_str(), field(r.stream).c_str(), r.tiles, r.out,
                 r.cpu_ms, r.vk_ms);
         if (has_layer)
-            fprintf(f, "%.3f,%d,%d\n", r.khr_ms, r.vk_ok ? 1 : 0, r.khr_ok ? 1 : 0);
+            fprintf(f, "%.3f,%d,%d", r.khr_ms, r.vk_ok ? 1 : 0, r.khr_ok ? 1 : 0);
         else
-            fprintf(f, ",%d,\n", r.vk_ok ? 1 : 0);
+            fprintf(f, ",%d,", r.vk_ok ? 1 : 0);
+        if (with_load)
+            write_load(f, r.ld);
+        fprintf(f, "\n");
     }
     fclose(f);
     return true;
@@ -721,6 +1006,16 @@ int main(int argc, char** argv) {
             a.cfg.verbose = true;
         else if (s == "-lits" && more)
             a.cfg.literal_rounds = atoi(argv[++i]);
+        else if (s == "-load")
+            a.load = true;
+        else if (s == "-read-threads" && more)
+            a.cfg.read_threads = (uint32_t)atoi(argv[++i]);
+        else if (s == "-chunk" && more)
+            a.cfg.load_chunk_tiles = (uint32_t)atoi(argv[++i]);
+        else if (s == "-idle-ms" && more)
+            a.idle_ms = atof(argv[++i]);
+        else if (s == "-load-rounds" && more)
+            a.load_rounds = std::max(1, atoi(argv[++i]));
         else if (s[0] == '-') {
             printf("unknown argument %s\n", argv[i]);
             return 1;
@@ -729,7 +1024,7 @@ int main(int argc, char** argv) {
     }
     if (a.files.empty()) {
         printf("usage: bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-ms N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct] [-regions]\n"
-               "       [-root N] [-droot N] [-ring N] [-pad N] [-x N] [-tile-count N] [-lits 0|1] [-v]\n");
+               "       [-root N] [-droot N] [-ring N] [-pad N] [-x N] [-tile-count N] [-lits 0|1] [-v] [-load] [-load-rounds N] [-chunk N] [-read-threads N] [-idle-ms N]\n");
         return 1;
     }
 
@@ -748,8 +1043,21 @@ int main(int argc, char** argv) {
     for (const std::string& path : a.files) {
         row_t row;
         ok = run_file(a, ctx, path, row) && ok;
+        if (a.load && a.tile_count == 0 && !row.stream.empty())
+            ok = run_load(a, ctx, {path}, row) && ok;
         if (!row.stream.empty())
             rows.push_back(row);
+    }
+    if (a.load && a.tile_count == 0 && a.files.size() > 1) {
+        row_t all;
+        all.stream = "all";
+        for (const row_t& r : rows) {
+            all.tiles += r.tiles;
+            all.out += r.out;
+        }
+        all.vk_ok = run_load(a, ctx, a.files, all);
+        ok = all.vk_ok && ok;
+        rows.push_back(all);
     }
     std::string csv = a.csv;
     if (csv.empty() && !a.csvdir.empty()) {
@@ -757,7 +1065,7 @@ int main(int argc, char** argv) {
         csv = (std::filesystem::path(a.csvdir) / file_name_for(gpu_name)).string();
     }
     if (!csv.empty()) {
-        if (write_csv(csv, rows))
+        if (write_csv(csv, rows, a.load && a.tile_count == 0))
             printf("[bench] %zu rows written to %s\n", rows.size(), csv.c_str());
         else
             printf("[bench] cant write %s\n", csv.c_str());

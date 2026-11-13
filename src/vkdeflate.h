@@ -69,6 +69,8 @@ namespace vkdeflate {
         uint32_t dist_root = 7;
         uint32_t runs_pad_bytes = 4608;
         int literal_rounds = -1;
+        uint32_t load_chunk_tiles = 512;
+        uint32_t read_threads = 4;
         bool capture_stats = false;
         bool verbose = false;
         VkPipelineCache pipeline_cache = VK_NULL_HANDLE;

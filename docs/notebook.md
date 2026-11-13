@@ -5,6 +5,80 @@ RX 9070 XT. Kernel time in ms
 on the GPU, best of several rounds, unless a row says otherwise. The machine was shared, so times move by 10 %
 between sessions; comparisons inside one table were run interleaved.
 
+## load(), file to device-local buffer
+
+`bench -load`, twelve Silesia streams, 212 MB of output, best of ten, the old and the new library alternating three
+times. Before, `record_load()` read each file into a vector, copied bytes given in memory into a vector too, then
+copied both into the staging buffer. Now the header is read on its own for `describe()` and the file straight into
+the mapped staging buffer; bytes in memory are copied once.
+
+| sum, ms | before | after |
+|---|---|---|
+| `load()`, file just dropped from the OS cache | 120.4 | 106.3 |
+| `load()`, cached file | 68.3 | 44.0 |
+| `load()`, bytes in memory | 56.1 | 32.1 |
+| `record_load()` on the host, file dropped from the cache | 74.4 | 62.1 |
+| `record_load()` on the host, cached file | 28.2 | 12.6 |
+| `record_load()` on the host, bytes in memory | 18.4 | 4.7 |
+| GPU time of what `record_load()` records | 33.9 | 29.5 |
+
+mozilla, cached file 15.4 to 8.6 ms, bytes in memory 12.0 to 5.9. xml (82 tiles) stays at 1.9 ms, most of it GPU.
+
+Of the GPU time, sum: kernel 11.6, upload of the 71 MB of compressed input 5.1, copy into the caller's buffer 2.1;
+about 11 ms are not accounted for. The CPU decoder on 12 threads plus the upload of its output: 280 ms.
+
+The 11 ms are the clock. `bench -idle-ms N` sleeps before each measured dispatch; after 1 ms of idle the kernel is
+2.7 to 3.4 times slower, and 10 ms of idle is no worse than 1:
+
+| kernel, ms | no idle | 1 ms | 3 ms | 10 ms |
+|---|---|---|---|---|
+| mozilla | 1.95 | 5.23 | 5.34 | 5.18 |
+| x-ray | 1.06 | 3.55 | 3.58 | 3.61 |
+| xml | 0.63 | 2.14 | 2.16 | 2.14 |
+
+`load()` now cuts the tiles into chunks of 512 in file order (`config_t::load_chunk_tiles`, 0 for one chunk) and
+fills the next chunk's half of a double staging buffer while the GPU decodes the last one. Best of ten, the two
+settings alternating three times:
+
+| ms | one chunk | 512 tiles |
+|---|---|---|
+| twelve streams in one `load()`, file dropped from the cache | 79.0 | 73.6 |
+| the same, cached files | 29.9 | 22.7 |
+| the same, bytes in memory | 18.3 | 17.2 |
+| one stream per `load()`, sum, cached files | 42.3 | 42.4 |
+
+A first version took the start of a chunk after sorting its tiles by size and left part of each chunk out of the
+upload. The bench passed, because the device buffer still held the bytes of the previous call; `examples/load`
+with two items of the same file failed. The bench now checks its output after `trim()`.
+
+The drives: a Lexar NM620 1 TB (NVMe, PCIe 3.0 x4) and a Goodram CX400 512 GB (SATA). 86 vectors, 364 MB on the
+NVMe drive, the twelve Silesia originals, 212 MB, on the SATA drive; `fread` in 4 MB pieces, files dropped from
+the OS cache first, GB/s, best of three:
+
+| threads | NVMe, cold | NVMe, cached | SATA, cold | SATA, cached |
+|---|---|---|---|---|
+| 1 | 0.97 to 1.22 | 5.4 to 6.1 | 0.47 to 0.48 | 6.4 to 7.1 |
+| 2 | 1.56 to 1.76 | 8.3 to 10.4 | 0.54 to 0.55 | 8.7 to 10.2 |
+| 4 | 1.85 to 1.95 | 5.9 to 9.7 | 0.54 | 6.8 to 7.3 |
+| 8 | 1.96 to 1.97 | 7.9 to 8.3 | 0.54 | 6.0 to 8.1 |
+
+Unbuffered reads (`FILE_FLAG_NO_BUFFERING`) stop at the same 2.0 to 2.1 GB/s on the NVMe drive, at any queue
+depth from 8 up, and lose the cache.
+
+`load()` now reads each chunk with `config_t::read_threads` threads, each with its own file handle and a part of
+the chunk. The twelve Silesia streams on each drive, best of ten, thread counts alternating three times:
+
+| ms | 1 thread | 2 | 4 |
+|---|---|---|---|
+| NVMe, twelve streams in one `load()`, dropped from the cache | 74.2 | 66.7 | 59.9 |
+| NVMe, the same, cached | 22.7 | 20.1 | 19.4 |
+| NVMe, one stream per `load()`, sum, dropped from the cache | 106.0 | 95.6 | 94.2 |
+| SATA, twelve streams in one `load()`, dropped from the cache | 175.0 | 168.9 | 165.4 |
+| SATA, the same, cached | 22.7 | 19.8 | 19.3 |
+
+Bytes in memory do not change (17.1 to 17.2 ms). Four threads are no slower than two anywhere here, so 4 is the
+default.
+
 ## RX 9070 XT, last package
 
 A friend's machine, a package of six kernel variants, best of three rounds, variants alternating, twelve Silesia streams. Every output

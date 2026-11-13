@@ -128,6 +128,8 @@ namespace vkdeflate {
         uint32_t dist_root = 7;
         uint32_t runs_pad_bytes = 4608;
         int literal_rounds = -1;
+        uint32_t load_chunk_tiles = 512;
+        uint32_t read_threads = 4;
         bool capture_stats = false;
         bool verbose = false;
         VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
@@ -2018,6 +2020,7 @@ bool compress(const uint8_t* p, size_t n, std::vector<uint8_t>& out, std::string
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <thread>
 #include <vector>
 
 #if defined(_WIN32)
@@ -16235,9 +16238,11 @@ struct ctx_t {
     VkPipeline pipeline_runs = VK_NULL_HANDLE;
     buf_t in, tiles, out, status, up, down, regions;
     VkCommandPool load_pool = VK_NULL_HANDLE;
-    VkCommandBuffer load_cmd = VK_NULL_HANDLE;
-    VkFence load_fence = VK_NULL_HANDLE;
+    std::vector<VkCommandBuffer> load_cmds;
+    VkFence load_fences[2] = {};
     uint32_t load_family = UINT32_MAX;
+    uint32_t load_chunk = 512;
+    uint32_t read_threads = 4;
     std::vector<std::pair<uint32_t, uint32_t>> load_owners;
     VkPipelineCache cache = VK_NULL_HANDLE;
     VkDeviceSize regions_at = 0;
@@ -16745,6 +16750,8 @@ ctx_t* create(const config_t& cfg, std::string& err) {
     g->lit_root = cfg.lit_root;
     g->dist_root = cfg.dist_root;
     g->lits = cfg.literal_rounds;
+    g->load_chunk = cfg.load_chunk_tiles;
+    g->read_threads = cfg.read_threads;
     if (!init_device(*g, cfg) || !make_pipeline(*g)) {
         err = g->err;
         destroy(g);
@@ -16764,6 +16771,8 @@ ctx_t* attach(VkInstance instance, VkPhysicalDevice phys, VkDevice dev, PFN_vkGe
     g->lit_root = cfg.lit_root;
     g->dist_root = cfg.dist_root;
     g->lits = cfg.literal_rounds;
+    g->load_chunk = cfg.load_chunk_tiles;
+    g->read_threads = cfg.read_threads;
     g->instance = instance;
     g->phys = phys;
     g->dev = dev;
@@ -16804,8 +16813,9 @@ void destroy(ctx_t* g) {
         free_buf(*g, g->up);
         free_buf(*g, g->down);
         free_buf(*g, g->regions);
-        if (g->load_fence)
-            g->f.vkDestroyFence(g->dev, g->load_fence, nullptr);
+        for (VkFence f : g->load_fences)
+            if (f)
+                g->f.vkDestroyFence(g->dev, f, nullptr);
         if (g->load_pool)
             g->f.vkDestroyCommandPool(g->dev, g->load_pool, nullptr);
         if (g->pipeline)
@@ -16942,13 +16952,13 @@ bool cmd_decompress_memory(ctx_t* g, VkCommandBuffer cmd, const region_t* region
     return true;
 }
 
-static bool read_range(const load_t& item, std::vector<uint8_t>& bytes, std::string& err) {
+static FILE* open_range(const load_t& item, uint64_t& size, std::string& err) {
     FILE* f = fopen(item.path, "rb");
     if (!f) {
         err = std::string("cant open ") + item.path;
-        return false;
+        return nullptr;
     }
-    uint64_t size = item.size;
+    size = item.size;
     if (!size) {
 #if defined(_WIN32)
         _fseeki64(f, 0, SEEK_END);
@@ -16964,51 +16974,136 @@ static bool read_range(const load_t& item, std::vector<uint8_t>& bytes, std::str
 #else
     fseeko(f, (off_t)item.offset, SEEK_SET);
 #endif
-    bytes.resize((size_t)size);
-    size_t got = size ? fread(bytes.data(), 1, bytes.size(), f) : 0;
+    return f;
+}
+
+static bool read_head(const load_t& item, std::vector<uint8_t>& head, size_t& n, std::string& err) {
+    uint64_t size = 0;
+    FILE* f = open_range(item, size, err);
+    if (!f)
+        return false;
+    if (size > 4ull * UINT32_MAX) {
+        fclose(f);
+        err = std::string("more than 4 GB in ") + item.path;
+        return false;
+    }
+    n = (size_t)size;
+    head.resize(std::min(n, gdeflate::HEADER_SIZE));
+    size_t got = head.empty() ? 0 : fread(head.data(), 1, head.size(), f);
+    if (got == gdeflate::HEADER_SIZE) {
+        head.resize(std::min(n, gdeflate::HEADER_SIZE + 4 * (size_t)(head[2] | head[3] << 8)));
+        got += fread(head.data() + got, 1, head.size() - got, f);
+    }
     fclose(f);
-    if (got != bytes.size()) {
+    if (got != head.size()) {
         err = std::string("short read from ") + item.path;
         return false;
     }
     return true;
 }
 
-bool record_load(ctx_t* g, VkCommandBuffer cmd, const load_t* items, uint32_t count, std::string& err) {
-    struct owner_t {
-        tile_desc_t tile;
-        uint32_t item;
-        uint32_t index;
-    };
-    struct span_t {
-        VkDeviceSize out;
-        size_t size;
-    };
-    g->load_owners.clear();
-    if (!count)
-        return true;
-    if (!g->f.vkQueueSubmit) {
-#define LOAD_DEVICE_LATE(fn) g->f.fn = (PFN_##fn)g->f.vkGetDeviceProcAddr(g->dev, #fn);
-        VK_FN_DEVICE(LOAD_DEVICE_LATE)
+static bool read_part(const load_t& item, uint64_t from, uint8_t* out, size_t n, uint64_t whole, std::string& err) {
+    uint64_t size = 0;
+    FILE* f = open_range(item, size, err);
+    if (!f)
+        return false;
+    bool fits = size == whole && from + n <= size;
+#if defined(_WIN32)
+    if (fits && from)
+        _fseeki64(f, (long long)from, SEEK_CUR);
+#else
+    if (fits && from)
+        fseeko(f, (off_t)from, SEEK_CUR);
+#endif
+    size_t got = fits && n ? fread(out, 1, n, f) : 0;
+    fclose(f);
+    if (!fits || got != n) {
+        err = std::string("short read from ") + item.path;
+        return false;
     }
+    return true;
+}
 
-    std::vector<std::vector<uint8_t>> files(count);
+struct owner_t {
+    tile_desc_t tile;
+    uint32_t item;
+    uint32_t index;
+};
+
+struct span_t {
+    VkDeviceSize out;
+    size_t size;
+};
+
+struct chunk_t {
+    uint32_t first;
+    uint32_t count;
+    VkDeviceSize from;
+    VkDeviceSize to;
+};
+
+struct plan_t {
+    std::vector<tile_desc_t> tiles;
+    std::vector<std::pair<uint32_t, uint32_t>> owners;
+    std::vector<span_t> spans;
+    std::vector<size_t> sizes;
+    std::vector<VkDeviceSize> at;
+    std::vector<chunk_t> chunks;
+    VkDeviceSize in_size = 0;
+    VkDeviceSize out_size = 0;
+};
+
+static std::vector<size_t> chunk_starts(const std::vector<owner_t>& owners, uint32_t per_chunk) {
+    std::vector<size_t> starts = {0};
+    for (size_t i = per_chunk; per_chunk && i + per_chunk / 2 < owners.size(); i += per_chunk)
+        starts.push_back(i);
+    for (size_t k = 1; k < starts.size(); k++) {
+        uint64_t bound = owners[starts[k]].tile.src;
+        for (size_t j = starts[k - 1]; j < starts[k]; j++)
+            if ((uint64_t)owners[j].tile.src + owners[j].tile.words > bound)
+                return {0};
+    }
+    return starts;
+}
+
+static void cut_chunks(plan_t& p, std::vector<owner_t>& owners, uint32_t per_chunk) {
+    std::stable_sort(owners.begin(), owners.end(), [](const owner_t& a, const owner_t& b) { return a.tile.src < b.tile.src; });
+    std::vector<size_t> starts = chunk_starts(owners, per_chunk);
+    for (size_t k = 0; k < starts.size(); k++) {
+        size_t end = k + 1 < starts.size() ? starts[k + 1] : owners.size();
+        VkDeviceSize from = k ? 4ull * owners[starts[k]].tile.src : 0;
+        VkDeviceSize to = end < owners.size() ? 4ull * owners[end].tile.src : p.in_size;
+        p.chunks.push_back({(uint32_t)starts[k], (uint32_t)(end - starts[k]), from, to});
+    }
+    for (const chunk_t& c : p.chunks)
+        std::stable_sort(owners.begin() + c.first, owners.begin() + c.first + c.count,
+                         [](const owner_t& a, const owner_t& b) { return a.tile.words > b.tile.words; });
+    for (const owner_t& o : owners) {
+        p.tiles.push_back(o.tile);
+        p.owners.push_back({o.item, o.index});
+    }
+}
+
+static bool plan_load(const load_t* items, uint32_t count, uint32_t per_chunk, plan_t& p, std::string& err) {
+    std::vector<uint8_t> head;
     std::vector<owner_t> owners;
-    std::vector<span_t> spans(count);
-    VkDeviceSize in_size = 0, out_size = 0;
+    p.spans.resize(count);
+    p.sizes.resize(count);
+    p.at.resize(count);
     for (uint32_t i = 0; i < count; i++) {
         const load_t& item = items[i];
         const uint8_t* bytes = item.data;
         size_t n = (size_t)item.size;
+        size_t seen = n;
         if (!bytes) {
             if (!item.path) {
                 err = "item " + std::to_string(i) + ": neither path nor data";
                 return false;
             }
-            if (!read_range(item, files[i], err))
+            if (!read_head(item, head, n, err))
                 return false;
-            bytes = files[i].data();
-            n = files[i].size();
+            bytes = head.data();
+            seen = head.size();
         }
         if ((item.buffer != VK_NULL_HANDLE) == (item.image != VK_NULL_HANDLE)) {
             err = "item " + std::to_string(i) + ": needs a buffer or an image, not both";
@@ -17016,75 +17111,127 @@ bool record_load(ctx_t* g, VkCommandBuffer cmd, const load_t* items, uint32_t co
         }
         std::vector<tile_desc_t> descs;
         size_t total = 0;
-        if (!describe(bytes, n, n, descs, total, err)) {
+        if (!describe(bytes, seen, n, descs, total, err)) {
             err = "item " + std::to_string(i) + ": " + err;
             return false;
         }
-        if (in_size / 4 + n / 4 + 1 > UINT32_MAX || out_size + total > UINT32_MAX) {
+        if (p.in_size / 4 + n / 4 + 1 > UINT32_MAX || p.out_size + total > UINT32_MAX) {
             err = "more than 4 GB in one load call";
             return false;
         }
         for (const tile_desc_t& t : descs)
-            owners.push_back({{t.src + (uint32_t)(in_size / 4), t.words, t.dst + (uint32_t)out_size, t.size}, i,
+            owners.push_back({{t.src + (uint32_t)(p.in_size / 4), t.words, t.dst + (uint32_t)p.out_size, t.size}, i,
                               t.dst / (uint32_t)gdeflate::TILE_SIZE});
-        spans[i] = {out_size, total};
-        if (files[i].empty() && n)
-            files[i].assign(bytes, bytes + n);
-        in_size += align_up(n, 4);
-        out_size += align_up(total, 256);
+        p.spans[i] = {p.out_size, total};
+        p.sizes[i] = n;
+        p.at[i] = p.in_size;
+        p.in_size += align_up(n, 4);
+        p.out_size += align_up(total, 256);
     }
-    if (owners.empty())
-        return true;
-    std::stable_sort(owners.begin(), owners.end(), [](const owner_t& a, const owner_t& b) { return a.tile.words > b.tile.words; });
-    std::vector<tile_desc_t> tiles(owners.size());
-    for (size_t i = 0; i < owners.size(); i++)
-        tiles[i] = owners[i].tile;
+    if (!owners.empty())
+        cut_chunks(p, owners, per_chunk);
+    return true;
+}
 
+static bool fill_range(const load_t* items, const plan_t& p, VkDeviceSize from, VkDeviceSize to, uint8_t* out,
+                       std::string& err) {
+    for (size_t i = 0; i < p.sizes.size(); i++) {
+        VkDeviceSize lo = std::max(from, p.at[i]);
+        VkDeviceSize hi = std::min(to, p.at[i] + align_up(p.sizes[i], 4));
+        if (lo >= hi)
+            continue;
+        VkDeviceSize data_hi = std::min(hi, p.at[i] + p.sizes[i]);
+        if (data_hi > lo) {
+            size_t n = (size_t)(data_hi - lo);
+            uint64_t off = lo - p.at[i];
+            if (items[i].data)
+                memcpy(out + (lo - from), items[i].data + off, n);
+            else if (!read_part(items[i], off, out + (lo - from), n, p.sizes[i], err))
+                return false;
+        }
+        VkDeviceSize pad = std::max(data_hi, lo);
+        if (hi > pad)
+            memset(out + (pad - from), 0, (size_t)(hi - pad));
+    }
+    return true;
+}
+
+static bool fill_parallel(const load_t* items, const plan_t& p, VkDeviceSize from, VkDeviceSize to, uint8_t* out,
+                          uint32_t threads, std::string& err) {
+    constexpr VkDeviceSize min_part = 1u << 20;
+    VkDeviceSize n = to - from;
+    uint32_t parts = (uint32_t)std::min<VkDeviceSize>(std::max(threads, 1u), std::max<VkDeviceSize>(n / min_part, 1));
+    if (parts <= 1)
+        return fill_range(items, p, from, to, out, err);
+    VkDeviceSize step = align_up((n + parts - 1) / parts, 4096);
+    std::vector<std::string> errs(parts);
+    std::vector<char> oks(parts, 0);
+    std::vector<std::thread> workers;
+    for (uint32_t i = 1; i < parts; i++) {
+        VkDeviceSize a = std::min(to, from + i * step), b = std::min(to, a + step);
+        workers.emplace_back([&, i, a, b] { oks[i] = fill_range(items, p, a, b, out + (a - from), errs[i]); });
+    }
+    oks[0] = fill_range(items, p, from, std::min(to, from + step), out, errs[0]);
+    for (std::thread& w : workers)
+        w.join();
+    for (uint32_t i = 0; i < parts; i++)
+        if (!oks[i]) {
+            err = errs[i];
+            return false;
+        }
+    return true;
+}
+
+static bool alloc_load(ctx_t* g, const plan_t& p, VkDeviceSize staging, std::string& err) {
     constexpr VkBufferUsageFlags storage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     constexpr VkBufferUsageFlags xfer_dst = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     constexpr VkBufferUsageFlags xfer_src = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     constexpr VkMemoryPropertyFlags local = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     constexpr VkMemoryPropertyFlags visible = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    VkDeviceSize tiles_size = tiles.size() * sizeof(tile_desc_t);
-    VkDeviceSize status_size = tiles.size() * 4;
-    VkDeviceSize up_tiles = align_up(in_size, 256);
-    if (!make_buf(*g, g->in, in_size, storage | xfer_dst, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
+    VkDeviceSize tiles_size = p.tiles.size() * sizeof(tile_desc_t);
+    VkDeviceSize status_size = p.tiles.size() * 4;
+    if (!make_buf(*g, g->in, p.in_size, storage | xfer_dst, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
         !make_buf(*g, g->tiles, tiles_size, storage | xfer_dst, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
-        !make_buf(*g, g->out, out_size, storage | xfer_src, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
+        !make_buf(*g, g->out, p.out_size, storage | xfer_src, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
         !make_buf(*g, g->status, status_size, storage | xfer_src, local, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ||
-        !make_buf(*g, g->up, up_tiles + tiles_size, xfer_src, visible, local) ||
+        !make_buf(*g, g->up, staging + tiles_size, xfer_src, visible, local) ||
         !make_buf(*g, g->down, status_size, xfer_dst, visible | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, local)) {
         err = g->err;
         return false;
     }
+    memcpy((uint8_t*)g->up.map + staging, p.tiles.data(), (size_t)tiles_size);
+    return true;
+}
 
-    uint8_t* up = (uint8_t*)g->up.map;
-    VkDeviceSize at = 0;
-    for (uint32_t i = 0; i < count; i++) {
-        VkDeviceSize padded = align_up(files[i].size(), 4);
-        if (!files[i].empty())
-            memcpy(up + at, files[i].data(), files[i].size());
-        memset(up + at + files[i].size(), 0, (size_t)(padded - files[i].size()));
-        at += padded;
+static void record_chunk(ctx_t* g, VkCommandBuffer cmd, const plan_t& p, size_t k, VkDeviceSize slot, VkDeviceSize table) {
+    const chunk_t& c = p.chunks[k];
+    if (k == 0) {
+        VkBufferCopy ct = {table, 0, p.tiles.size() * sizeof(tile_desc_t)};
+        g->f.vkCmdCopyBuffer(cmd, g->up.buf, g->tiles.buf, 1, &ct);
     }
-    memcpy(up + up_tiles, tiles.data(), (size_t)tiles_size);
-
-    VkBufferCopy c_in = {0, 0, in_size};
-    VkBufferCopy c_tiles = {up_tiles, 0, tiles_size};
-    g->f.vkCmdCopyBuffer(cmd, g->up.buf, g->in.buf, 1, &c_in);
-    g->f.vkCmdCopyBuffer(cmd, g->up.buf, g->tiles.buf, 1, &c_tiles);
+    if (c.to > c.from) {
+        VkBufferCopy ci = {slot, c.from, c.to - c.from};
+        g->f.vkCmdCopyBuffer(cmd, g->up.buf, g->in.buf, 1, &ci);
+    }
     barrier(*g, cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
             VK_ACCESS_SHADER_READ_BIT);
-    record(g, cmd, job_t{g->in.addr, g->tiles.addr, g->out.addr, g->status.addr, (uint32_t)tiles.size(),
-                         job_flags(tiles, (size_t)out_size)});
+    std::vector<tile_desc_t> sub(p.tiles.begin() + c.first, p.tiles.begin() + c.first + c.count);
+    size_t out_bytes = 0;
+    for (const tile_desc_t& t : sub)
+        out_bytes += t.size;
+    record(g, cmd, job_t{g->in.addr, g->tiles.addr + c.first * sizeof(tile_desc_t), g->out.addr, g->status.addr + 4ull * c.first,
+                         c.count, job_flags(sub, out_bytes)});
+}
+
+static void record_finish(ctx_t* g, VkCommandBuffer cmd, const load_t* items, const plan_t& p) {
     barrier(*g, cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
             VK_ACCESS_TRANSFER_READ_BIT);
-    for (uint32_t i = 0; i < count; i++) {
+    for (size_t i = 0; i < p.spans.size(); i++) {
         const load_t& item = items[i];
-        if (!spans[i].size)
+        if (!p.spans[i].size)
             continue;
         if (item.buffer) {
-            VkBufferCopy c = {spans[i].out, item.buffer_offset, spans[i].size};
+            VkBufferCopy c = {p.spans[i].out, item.buffer_offset, p.spans[i].size};
             g->f.vkCmdCopyBuffer(cmd, g->out.buf, item.buffer, 1, &c);
             continue;
         }
@@ -17102,10 +17249,10 @@ bool record_load(ctx_t* g, VkCommandBuffer cmd, const load_t* items, uint32_t co
                                   nullptr, 1, &ib);
         std::vector<VkBufferImageCopy> copies(item.regions, item.regions + item.region_count);
         for (VkBufferImageCopy& c : copies)
-            c.bufferOffset += spans[i].out;
+            c.bufferOffset += p.spans[i].out;
         if (copies.empty()) {
             VkBufferImageCopy c = {};
-            c.bufferOffset = spans[i].out;
+            c.bufferOffset = p.spans[i].out;
             c.imageSubresource = item.layers;
             c.imageExtent = item.extent;
             copies.push_back(c);
@@ -17119,12 +17266,31 @@ bool record_load(ctx_t* g, VkCommandBuffer cmd, const load_t* items, uint32_t co
         g->f.vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr,
                                   0, nullptr, 1, &ib);
     }
-    VkBufferCopy c_status = {0, 0, status_size};
+    VkBufferCopy c_status = {0, 0, p.tiles.size() * 4};
     g->f.vkCmdCopyBuffer(cmd, g->status.buf, g->down.buf, 1, &c_status);
     barrier(*g, cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
             VK_ACCESS_HOST_READ_BIT);
-    for (const owner_t& o : owners)
-        g->load_owners.push_back({o.item, o.index});
+    g->load_owners = p.owners;
+}
+
+bool record_load(ctx_t* g, VkCommandBuffer cmd, const load_t* items, uint32_t count, std::string& err) {
+    g->load_owners.clear();
+    if (!count)
+        return true;
+    if (!g->f.vkQueueSubmit) {
+#define LOAD_DEVICE_LATE(fn) g->f.fn = (PFN_##fn)g->f.vkGetDeviceProcAddr(g->dev, #fn);
+        VK_FN_DEVICE(LOAD_DEVICE_LATE)
+    }
+    plan_t p;
+    if (!plan_load(items, count, 0, p, err))
+        return false;
+    if (p.tiles.empty())
+        return true;
+    VkDeviceSize table = align_up(p.in_size, 256);
+    if (!alloc_load(g, p, table, err) || !fill_range(items, p, 0, p.in_size, (uint8_t*)g->up.map, err))
+        return false;
+    record_chunk(g, cmd, p, 0, 0, table);
+    record_finish(g, cmd, items, p);
     return true;
 }
 
@@ -17139,7 +17305,59 @@ bool load_result(ctx_t* g, std::string& err) {
     return true;
 }
 
+static bool load_setup(ctx_t* g, uint32_t queue_family, size_t cmds, std::string& err) {
+    VkResult r = VK_SUCCESS;
+    if (g->load_family != queue_family) {
+        if (g->load_pool)
+            g->f.vkDestroyCommandPool(g->dev, g->load_pool, nullptr);
+        g->load_pool = VK_NULL_HANDLE;
+        g->load_cmds.clear();
+        g->load_family = UINT32_MAX;
+        VkCommandPoolCreateInfo pci = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+        pci.queueFamilyIndex = queue_family;
+        r = g->f.vkCreateCommandPool(g->dev, &pci, nullptr, &g->load_pool);
+        VkFenceCreateInfo fci = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+        for (VkFence& f : g->load_fences)
+            if (r == VK_SUCCESS && !f)
+                r = g->f.vkCreateFence(g->dev, &fci, nullptr, &f);
+        if (r != VK_SUCCESS) {
+            err = "load: command pool or fence failed: " + std::to_string((int)r);
+            return false;
+        }
+        g->load_family = queue_family;
+    }
+    if (g->load_cmds.size() < cmds) {
+        size_t have = g->load_cmds.size();
+        g->load_cmds.resize(cmds);
+        VkCommandBufferAllocateInfo cai = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+        cai.commandPool = g->load_pool;
+        cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cai.commandBufferCount = (uint32_t)(cmds - have);
+        if ((r = g->f.vkAllocateCommandBuffers(g->dev, &cai, g->load_cmds.data() + have)) != VK_SUCCESS) {
+            g->load_cmds.resize(have);
+            err = "load: command buffers failed: " + std::to_string((int)r);
+            return false;
+        }
+    }
+    g->f.vkResetCommandPool(g->dev, g->load_pool, 0);
+    return true;
+}
+
+static bool wait_slot(ctx_t* g, bool& pending, VkFence fence, std::string& err) {
+    if (!pending)
+        return true;
+    pending = false;
+    VkResult r = g->f.vkWaitForFences(g->dev, 1, &fence, VK_TRUE, UINT64_MAX);
+    g->f.vkResetFences(g->dev, 1, &fence);
+    if (r != VK_SUCCESS) {
+        err = "vkWaitForFences failed: " + std::to_string((int)r);
+        return false;
+    }
+    return true;
+}
+
 bool load(ctx_t* g, VkQueue queue, uint32_t queue_family, const load_t* items, uint32_t count, std::string& err) {
+    g->load_owners.clear();
     if (!count)
         return true;
     if (g->owns_device && !queue) {
@@ -17150,48 +17368,52 @@ bool load(ctx_t* g, VkQueue queue, uint32_t queue_family, const load_t* items, u
 #define LOAD_DEVICE_FIRST(fn) g->f.fn = (PFN_##fn)g->f.vkGetDeviceProcAddr(g->dev, #fn);
         VK_FN_DEVICE(LOAD_DEVICE_FIRST)
     }
-    VkResult r = VK_SUCCESS;
-    if (g->load_family != queue_family) {
-        if (g->load_pool)
-            g->f.vkDestroyCommandPool(g->dev, g->load_pool, nullptr);
-        g->load_pool = VK_NULL_HANDLE;
-        VkCommandPoolCreateInfo pci = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
-        pci.queueFamilyIndex = queue_family;
-        VkCommandBufferAllocateInfo cai = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-        cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        cai.commandBufferCount = 1;
-        if ((r = g->f.vkCreateCommandPool(g->dev, &pci, nullptr, &g->load_pool)) == VK_SUCCESS) {
-            cai.commandPool = g->load_pool;
-            r = g->f.vkAllocateCommandBuffers(g->dev, &cai, &g->load_cmd);
-        }
-        VkFenceCreateInfo fci = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
-        if (r == VK_SUCCESS && !g->load_fence)
-            r = g->f.vkCreateFence(g->dev, &fci, nullptr, &g->load_fence);
+    plan_t p;
+    if (!plan_load(items, count, g->load_chunk, p, err))
+        return false;
+    if (p.tiles.empty())
+        return true;
+    VkDeviceSize slot = 0;
+    for (const chunk_t& c : p.chunks)
+        slot = std::max(slot, align_up(c.to - c.from, 256));
+    VkDeviceSize slots = p.chunks.size() > 1 ? 2 : 1;
+    if (!load_setup(g, queue_family, p.chunks.size(), err) || !alloc_load(g, p, slot * slots, err))
+        return false;
+    uint8_t* up = (uint8_t*)g->up.map;
+    bool pending[2] = {false, false};
+    bool ok = true;
+    for (size_t k = 0; k < p.chunks.size() && ok; k++) {
+        size_t s = k % 2;
+        ok = wait_slot(g, pending[s], g->load_fences[s], err) &&
+             fill_parallel(items, p, p.chunks[k].from, p.chunks[k].to, up + s * slot, g->read_threads, err);
+        if (!ok)
+            break;
+        VkCommandBuffer cmd = g->load_cmds[k];
+        VkCommandBufferBeginInfo bi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        g->f.vkBeginCommandBuffer(cmd, &bi);
+        record_chunk(g, cmd, p, k, s * slot, slot * slots);
+        if (k + 1 == p.chunks.size())
+            record_finish(g, cmd, items, p);
+        g->f.vkEndCommandBuffer(cmd);
+        VkSubmitInfo si = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+        si.commandBufferCount = 1;
+        si.pCommandBuffers = &cmd;
+        VkResult r = g->f.vkQueueSubmit(queue, 1, &si, g->load_fences[s]);
         if (r != VK_SUCCESS) {
-            err = "load: command pool or fence failed: " + std::to_string((int)r);
-            return false;
+            err = "vkQueueSubmit failed: " + std::to_string((int)r);
+            ok = false;
+            break;
         }
-        g->load_family = queue_family;
+        pending[s] = true;
     }
-    g->f.vkResetCommandPool(g->dev, g->load_pool, 0);
-    VkCommandBufferBeginInfo bi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    VkCommandBuffer cmd = g->load_cmd;
-    g->f.vkBeginCommandBuffer(cmd, &bi);
-    if (!record_load(g, cmd, items, count, err))
-        return false;
-    g->f.vkEndCommandBuffer(cmd);
-    VkSubmitInfo si = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
-    si.commandBufferCount = 1;
-    si.pCommandBuffers = &cmd;
-    if ((r = g->f.vkQueueSubmit(queue, 1, &si, g->load_fence)) != VK_SUCCESS) {
-        err = "vkQueueSubmit failed: " + std::to_string((int)r);
-        return false;
-    }
-    r = g->f.vkWaitForFences(g->dev, 1, &g->load_fence, VK_TRUE, UINT64_MAX);
-    g->f.vkResetFences(g->dev, 1, &g->load_fence);
-    if (r != VK_SUCCESS) {
-        err = "vkWaitForFences failed: " + std::to_string((int)r);
+    std::string wait_err;
+    bool waited = wait_slot(g, pending[0], g->load_fences[0], wait_err);
+    waited = wait_slot(g, pending[1], g->load_fences[1], wait_err) && waited;
+    if (ok && !waited)
+        err = wait_err;
+    if (!ok || !waited) {
+        g->load_owners.clear();
         return false;
     }
     return load_result(g, err);
