@@ -590,7 +590,8 @@ static VKAPI_ATTR void VKAPI_CALL decompress_nv(VkCommandBuffer cmd, uint32_t co
         if (regions[i].decompressionMethod & gdeflate_bit)
             list.push_back({regions[i].srcAddress, regions[i].dstAddress, regions[i].compressedSize, regions[i].decompressedSize});
     std::lock_guard<std::mutex> hold(d->lock);
-    vkdeflate::cmd_decompress_memory(d->ctx, cmd, list.data(), (uint32_t)list.size());
+    if (!vkdeflate::cmd_decompress_memory(d->ctx, cmd, list.data(), (uint32_t)list.size()))
+        fprintf(stderr, "[vkdeflate layer] vkCmdDecompressMemoryNV not recorded: region buffer could not be made\n");
     restore(d, cmd);
 }
 
@@ -617,7 +618,8 @@ static VKAPI_ATTR void VKAPI_CALL decompress_ext(VkCommandBuffer cmd, const VkDe
     if (!(info->decompressionMethod & gdeflate_bit))
         return;
     std::lock_guard<std::mutex> hold(d->lock);
-    vkdeflate::cmd_decompress_memory(d->ctx, cmd, (const vkdeflate::region_t*)info->pRegions, info->regionCount);
+    if (!vkdeflate::cmd_decompress_memory(d->ctx, cmd, (const vkdeflate::region_t*)info->pRegions, info->regionCount))
+        fprintf(stderr, "[vkdeflate layer] vkCmdDecompressMemoryEXT not recorded: region buffer could not be made\n");
     restore(d, cmd);
 }
 

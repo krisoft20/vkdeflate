@@ -541,11 +541,8 @@ static void free_buf(ctx_t& g, buf_t& b) {
     b = buf_t{};
 }
 
-static bool make_buf(ctx_t& g, buf_t& b, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags want,
+static bool grow_buf(ctx_t& g, buf_t& b, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags want,
                      VkMemoryPropertyFlags avoid) {
-    if (b.buf && b.size >= size)
-        return true;
-    free_buf(g, b);
     b.size = size < 4 ? 4 : size;
     bool addressed = (usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0;
     VkBufferCreateInfo bci = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -582,6 +579,17 @@ static bool make_buf(ctx_t& g, buf_t& b, VkDeviceSize size, VkBufferUsageFlags u
         b.addr = g.f.vkGetBufferDeviceAddress(g.dev, &bai);
     }
     return true;
+}
+
+static bool make_buf(ctx_t& g, buf_t& b, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags want,
+                     VkMemoryPropertyFlags avoid) {
+    if (b.buf && b.size >= size)
+        return true;
+    free_buf(g, b);
+    if (grow_buf(g, b, size, usage, want, avoid))
+        return true;
+    free_buf(g, b);
+    return false;
 }
 
 static VkDeviceSize align_up(VkDeviceSize v, VkDeviceSize a) {
