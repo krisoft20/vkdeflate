@@ -5,7 +5,7 @@ Each one decodes on the GPU and compares the result with the CPU decoder. `.\bui
 
 | example | API | what it shows |
 |---|---|---|
-| [`decompress.cpp`](decompress.cpp) | `create()`, `decompress()` | vkdeflate owns the device and the buffers; output lands in host memory |
+| [`decompress.cpp`](decompress.cpp) | `create()`, `decompress()` | `create()` makes the device and the buffers; output lands in host memory |
 | [`batch.cpp`](batch.cpp) | `attach()`, `describe()`, `record()` | your device and buffers, several streams in one command buffer |
 | [`regions.cpp`](regions.cpp) | `cmd_decompress_memory()` | the `vkCmdDecompressMemoryEXT` call shape: an array of regions in host memory, one raw tile each |
 | [`indirect.cpp`](indirect.cpp) | `record_regions_indirect()` | regions in GPU memory and their count written on the GPU, as `vkCmdDecompressMemoryIndirectCountEXT` |

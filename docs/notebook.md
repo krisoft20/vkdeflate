@@ -409,7 +409,7 @@ download into host memory. GPU columns from the fourth pass, CPU columns from th
 
 Submit to fence minus kernel: 0.12 ms for one tile.
 
-## The kernel as the driver sees it
+## The kernel in the driver's compiler output
 
 96 vector registers, 77 scalar, 3072 bytes of shared memory, no scratch. No `s_barrier`, no cache bypass, no
 store wait in the ISA. `VK_EXT_memory_decompression` is not offered by this driver.
@@ -421,7 +421,7 @@ CPU and GPU byte-exact. 16 pattern streams and the single header: the same. Fuzz
 copies: CPU and GPU agree on every verdict and output. Second pass: the same, plus 37 edge vectors and 2400
 broken copies of eight streams. Subgroup 64 (`-wave64`): the same 46 and 37 streams byte-exact. Linux (gcc 13,
 Ubuntu 24.04 under WSL): builds without warnings, CPU decoder byte-exact on the 46 and 37 streams. lavapipe
-offers subgroups of 8 or 16 and cannot run the kernel.
+has subgroups of 8 or 16 only and cannot run the kernel.
 
 ## Bugs the checks found
 

@@ -52,7 +52,7 @@ the loop.
 |---|---|
 | distance 1-4 | constant dwords, nothing read; a run continued from the previous pattern stays in registers |
 | up to 24 bytes, source final | its own lane: the whole 4-byte-rounded block in descending offsets, no per-byte test; then the literals of this and the previous round are stored again over the overshoot |
-| 25-128 bytes, source final, distance at least the length | whole workgroup, two matches per step, one wait for both |
+| 25 to 128 bytes, source final, distance at least the length | whole workgroup, two matches per step, one wait for both |
 | longer, source final | whole workgroup, 128 bytes per step: dwords from 256 bytes and distance 128 up, else bytes with clamped indices |
 | source in the previous round's output, up to 32 bytes | from a 512-byte ring in shared memory, or global memory with clamped lanes |
 | source in the previous round's output, longer | whole workgroup, one match at a time |
@@ -76,7 +76,8 @@ tile end the own-lane copy tests each byte instead of overshooting.
   overshoot bytes outside the window go to a spare byte.
 - Lanes read what other lanes stored: `subgroupBarrier()` plus an output buffer declared `subgroupcoherent`. On
   AMD this adds no instructions.
-- LLPC keeps a conditionally assigned local in registers through every loop. Initialise locals where declared.
+- Under LLPC a conditionally assigned local stays in registers through every loop. Initialise locals where
+  declared.
 - Same-wave loops compiled from a register rotation wait for the load at the loop end. A prefetch has to go
   through shared memory, written in the same iteration that loaded it.
 
@@ -109,10 +110,15 @@ Specialization constants, one binary for all.
 | `-x 11` | `experiment` | | device-scope fence instead of the subgroup barrier |
 | `-x 22` | | | no ring, with `-ring 4` |
 | `-x 23` | | | byte copies instead of dword copies |
+| `-lits 0`, `-lits 1` | `literal_rounds` | -1, auto | all-literal round in every block; auto turns it on under LLPC |
+| `-nochecks` | `bounds_checks` | true | per-round checks for symbols, distances, output and input overrun |
+| `bench -read-threads N` | `read_threads` | 4 | threads that read files in `load()` |
+| `bench -chunk N` | `load_chunk_tiles` | 512 | tiles per chunk in `load()`, 0 = one chunk |
 
 ## Commands
 
     .\build.cmd  or  ./build.sh                              everything
+    .\check.cmd                                             the GPU tests a change to src\ has to pass
     build\gdz.exe file.gdz -gpu                              CPU and GPU, compared
     build\gdz.exe -list test\vectors\silesia.txt -gpu        the Silesia streams
     build\gdz.exe -fuzz file.gdz -n 1000 -gpu                broken copies, CPU and GPU must agree
@@ -124,8 +130,8 @@ Specialization constants, one binary for all.
     build\bench.exe -list test\vectors\silesia.txt -csvdir results   times, plus a device and compiler report
     python tools\plot.py                                     redraw docs\img, refresh the README table
 
-After a change to `tile.comp`: Silesia streams, fuzz, `attach_test`, `single_header`. Time changes with `bench`, several
-interleaved rounds: `gdz -rounds` catches the GPU in different clock states. A switch kept as a specialization
+After a change to `src\`: `single_header`, then `check.cmd`. Time changes with `bench`, several interleaved
+rounds: `gdz -rounds` catches the GPU in different clock states. A switch kept as a specialization
 constant can move the other variant's timing by 10 %; compare variants as separate builds.
 
 `local.cmd` in the root (ignored by git) may set `VKDEFLATE_CMAKE_ARGS` (`-DGLSLC=... -DVULKAN_INCLUDE=...`) and

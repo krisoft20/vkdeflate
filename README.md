@@ -101,14 +101,14 @@ returns when the GPU is done. Several items share one dispatch.
 - An image gets one subresource by default and ends in `item.layout` (`SHADER_READ_ONLY_OPTIMAL` unless you set
   it); what was in it before is discarded. For a mip chain or array layers in one stream, set `item.regions` to
   your `VkBufferImageCopy` list, with offsets counted from the start of the decoded data.
-- A context is for one thread at a time, and `load()` submits to the queue during the call. To stay inside your own frame, call
-  `record_load(ctx, cmd, ...)` in your command buffer and `load_result(ctx, err)` after it has run; one load in
-  flight per context.
+- A context is for one thread at a time, and `load()` submits to the queue during the call. To stay inside your
+  own frame, call `record_load(ctx, cmd, ...)` in your command buffer and `load_result(ctx, err)` after it has
+  run; one load in flight per context.
 - The staging buffers stay allocated for the next call. `trim(ctx)` frees them.
-- `load()` reads files with `config_t::read_threads` threads (4) and cuts the work into chunks of
-  `load_chunk_tiles` tiles (512): the next chunk is read while the GPU decodes the last one. The twelve Silesia
-  streams in one call, 212 MB, RX 6650 XT, NVMe drive: 20 ms from cached files, 60 ms from files not in the OS
-  cache. `record_load()` reads on the calling thread, in one piece.
+- In `load()` files are read with `config_t::read_threads` threads (4), in chunks of `load_chunk_tiles` tiles
+  (512); the next chunk is read while the GPU decodes the last one. The twelve Silesia streams in one call,
+  212 MB, RX 6650 XT, NVMe drive: 20 ms from cached files, 60 ms from files not in the OS cache. With
+  `record_load()` the files are read on the calling thread, in one piece.
 - `config_t::bounds_checks` is on by default. Off, the kernel is about 3 % faster, and a broken or hostile stream
   can write past its tile or never finish. Turn it off only for files you compressed yourself.
 - Leave the other fields of `config_t` at their defaults; they are kernel tuning knobs for the benchmark.
@@ -128,7 +128,8 @@ vkdeflate::record(ctx, cmd, {src_addr, tiles_addr, dst_addr, status_addr, (uint3
 
 `record()` is one dispatch. You add the barriers around it and check the status words (0 is good,
 `vkdeflate::tile_error()` names the rest). `describe()` returns the tiles largest first, which shortens the
-dispatch; `status[i]` belongs to `tiles[i]`. `job_flags()` picks the pipeline for streams that are mostly long runs.
+dispatch; `status[i]` belongs to `tiles[i]`. `job_flags()` returns the flag for the pipeline used on streams that
+are mostly long runs.
 
 </details>
 
@@ -180,7 +181,8 @@ The output decodes with Microsoft's reference decoder.
 Vulkan 1.2 with `shaderInt64`, `shaderInt8`, `storageBuffer8BitAccess`, `bufferDeviceAddress` and
 `vulkanMemoryModel`, and a subgroup of 32 lanes: native, or chosen through `subgroupSizeControl` and
 `computeFullSubgroups` (core in 1.3, `VK_EXT_subgroup_size_control` before). `device_features()` sets exactly
-these. With the layer they are enabled at device creation. `gdeflate::decompress()` in the same header is the CPU fallback.
+these. With the layer they are enabled at device creation. `gdeflate::decompress()` in the same header is the
+CPU fallback.
 
 </details>
 
@@ -219,32 +221,32 @@ Per stream on the RX 6650 XT:
 </picture>
 
 A card that is not in this table is the most useful thing you can add: open a pull request with your
-`results\*.csv`. RDNA 4 owners especially, see Limits.
+`results\*.csv`. NVIDIA and Intel cards especially, see Limits.
 
 ## Limits
 
-- The subgroup-size-32 path and the features above are checked at start-up, but nobody has run it on NVIDIA or
-  Intel yet.
-- The rates are kernel time on the GPU. Into host memory the PCIe copy caps a stream at 3-6 GB/s; into GPU memory
+- The path for subgroups of 32 and the features above are checked at startup, but nobody has run it on NVIDIA
+  or Intel yet.
+- The rates are kernel time on the GPU. Into host memory the PCIe copy caps a stream at 3 to 6 GB/s; into GPU memory
   only the compressed bytes cross the bus.
 - A dispatch of fewer than about 100 tiles (6 MB) costs 0.5 to 1 ms whatever its size. Batch streams into one
   command buffer.
 - On RDNA 4 the lead over the Khronos layer is smaller (1.9x on an RX 9070 XT, 2.5x on an RX 6650 XT). One tile
   is decoded by one wave, and a wave takes 23 to 30 % longer per tile on the RX 9070 XT. The card has room to
-  spare, so a dispatch there takes as long as its slowest tile. Volunteers wanted:
-  `bench.cmd -khr` and the CSV, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+  spare, so a dispatch there takes as long as its slowest tile.
 - Subgroups narrower than 32 lanes (Mali, PowerVR, software renderers such as llvmpipe) are not supported.
 - On Linux the build and the CPU tests pass (gcc 13, Ubuntu 24.04 under WSL); no Linux GPU has run the kernel yet.
 - The layer, `load()` and the encoder are new and have run on one card, an RX 6650 XT. `load()` blocks until the
   GPU is done and takes at most 4 GB per call.
-- GDeflate compresses like zlib. zstd and Oodle pack tighter; the larger files are the price of a format a GPU can decode.
+- GDeflate compresses like zlib. zstd and Oodle pack tighter; the larger files are the price of a format a GPU
+  can decode.
 
 ## More
 
 - [`docs/notebook.md`](docs/notebook.md): what was tried and the numbers.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): how to send a result from your card.
-- `build\gdz.exe` packs, decodes, validates and fuzzes. `attach_test`, `layer_test` and `c_test` check the API,
-  the layer and the C interface.
+- `build\gdz.exe` for packing, decoding, checking and fuzzing streams. `check.cmd` runs the GPU tests: the
+  Silesia streams, a fuzz run, the attach path, the single header, the C interface, the layer and `load()`.
 
 ## Sources and licenses
 

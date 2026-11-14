@@ -8,4 +8,5 @@ Send the stream or how to make it, the GPU and the driver, and what happened.
 
 Fixes go into the latest release.
 
-With `config_t::bounds_checks` turned off the kernel trusts its input, and a broken stream is expected to misbehave.
+With `config_t::bounds_checks` turned off, a broken stream can write past its tile or never finish. That is not a
+bug.
