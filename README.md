@@ -109,6 +109,8 @@ returns when the GPU is done. Several items share one dispatch.
   `load_chunk_tiles` tiles (512): the next chunk is read while the GPU decodes the last one. The twelve Silesia
   streams in one call, 212 MB, RX 6650 XT, NVMe drive: 20 ms from cached files, 60 ms from files not in the OS
   cache. `record_load()` reads on the calling thread, in one piece.
+- `config_t::bounds_checks` is on by default. Off, the kernel is about 3 % faster, and a broken or hostile stream
+  can write past its tile or never finish. Turn it off only for files you compressed yourself.
 - Leave the other fields of `config_t` at their defaults; they are kernel tuning knobs for the benchmark.
 
 <details>

@@ -5,6 +5,21 @@ RX 9070 XT. Kernel time in ms
 on the GPU, best of several rounds, unless a row says otherwise. The machine was shared, so times move by 10 %
 between sessions; comparisons inside one table were run interleaved.
 
+## Bounds checks off
+
+`config_t::bounds_checks = false` (spec constant 7) drops the per-round checks for bad symbols, distances, output
+overrun and input overrun. The input index stays clamped. With checks on the ISA is byte-identical to before.
+46 streams, best of 30, on and off alternating three times, all byte-exact:
+
+| | checks on | checks off |
+|---|---|---|
+| instructions in the ISA | 9121 | 8941 |
+| 46 streams, sum of kernel ms | 40.75 | 39.39 (-3.3 %) |
+| per stream | | -6.7 to +9.3 %, median -3.8 % |
+| twelve Silesia streams at level 6, median | | -3.4 % |
+
+The level 0 streams got slower (sao +9.3 %, mr +5.7 %, x-ray +4.8 %).
+
 ## load(), file to device-local buffer
 
 `bench -load`, twelve Silesia streams, 212 MB of output, best of ten, the old and the new library alternating three

@@ -69,6 +69,7 @@ struct args_t {
     uint32_t root = 9;
     uint32_t droot = 7;
     int lits = -1;
+    bool checks = true;
     bool verbose = false;
 };
 
@@ -485,6 +486,8 @@ int main(int argc, char** argv) {
             a.root = (uint32_t)atoi(argv[++i]);
         else if (s == "-droot" && more)
             a.droot = (uint32_t)atoi(argv[++i]);
+        else if (s == "-nochecks")
+            a.checks = false;
         else if (s == "-lits" && more)
             a.lits = atoi(argv[++i]);
         else if (s == "-ringcheck" && more)
@@ -504,7 +507,7 @@ int main(int argc, char** argv) {
                "       gdz <file.gdz> [-o out] [-ref original] [-gpu] [-nocpu] [-threads N] [-rounds N] [-wave32|-wave64]\n"
                "       gdz -list <manifest> [-gpu] [-threads N] [-rounds N]\n"
                "       gdz -fuzz <file.gdz> [-n N] [-seed S] [-gpu]\n"
-               "       gpu options: [-x N] [-lits 0|1] [-ring N] [-pad N] [-root N] [-droot N] [-v]\n");
+               "       gpu options: [-x N] [-lits 0|1] [-nochecks] [-ring N] [-pad N] [-root N] [-droot N] [-v]\n");
         return 1;
     }
 
@@ -519,6 +522,7 @@ int main(int argc, char** argv) {
         cfg.lit_root = std::min(std::max(a.root, 6u), 11u);
         cfg.dist_root = std::min(std::max(a.droot, 7u), 10u);
         cfg.literal_rounds = a.lits;
+        cfg.bounds_checks = a.checks;
         std::string err;
         gpu = vkdeflate::create(cfg, err);
         if (!gpu) {

@@ -20,6 +20,7 @@ layout(constant_id = 3) const uint PAD = 0;
 layout(constant_id = 4) const uint LIT_ROOT = 9;
 layout(constant_id = 5) const uint DIST_ROOT = 7;
 layout(constant_id = 6) const uint LITS = 0;
+layout(constant_id = 7) const uint CHECKS = 1;
 layout(local_size_x_id = 0) in;
 
 struct tile_t {
@@ -185,7 +186,7 @@ void refill_staged(inout reader_t r, inout lane_t l, bool need) {
         l.cnt += 32u;
     }
     r.next += bitCount(b);
-    if (r.next > r.words)
+    if (CHECKS != 0u && r.next > r.words)
         r.err = ERR_INPUT;
 }
 
@@ -874,7 +875,7 @@ uint huffman_block(inout reader_t r, inout lane_t l, uint dst, uint size, inout 
         uint sz = (alive && !is_dist && !is_eob) ? val : 0u;
         uint off = subgroupExclusiveAdd(sz);
         uint total = subgroupBroadcast(off + sz, LANES - 1);
-        if (fault || total > size - pos || r.err != 0u) {
+        if (CHECKS != 0u && (fault || total > size - pos || r.err != 0u)) {
             uint err = subgroupAny(bad && alive) ? ERR_SYMBOL : 0u;
             if (total > size - pos)
                 err = ERR_OUTPUT;

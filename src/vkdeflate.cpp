@@ -175,6 +175,7 @@ struct ctx_t {
     uint32_t lit_root = 9;
     uint32_t dist_root = 7;
     int lits = -1;
+    bool checks = true;
     bool verbose = false;
     bool stats = false;
     std::string report;
@@ -488,9 +489,10 @@ static bool make_pipeline(ctx_t& g) {
     if ((r = g.f.vkCreatePipelineLayout(g.dev, &plci, nullptr, &g.layout)) != VK_SUCCESS)
         return fail(g, "vkCreatePipelineLayout", r);
 
-    uint32_t spec_data[7] = {g.subgroup, g.experiment, g.ring, g.pad, g.lit_root, g.dist_root, g.lits > 0 ? 1u : 0u};
-    VkSpecializationMapEntry spec_map[7] = {{0, 0, 4}, {1, 4, 4}, {2, 8, 4}, {3, 12, 4}, {4, 16, 4}, {5, 20, 4}, {6, 24, 4}};
-    VkSpecializationInfo spec = {7, spec_map, sizeof(spec_data), spec_data};
+    uint32_t spec_data[8] = {g.subgroup, g.experiment, g.ring, g.pad, g.lit_root, g.dist_root, g.lits > 0 ? 1u : 0u,
+                             g.checks ? 1u : 0u};
+    VkSpecializationMapEntry spec_map[8] = {{0, 0, 4}, {1, 4, 4}, {2, 8, 4}, {3, 12, 4}, {4, 16, 4}, {5, 20, 4}, {6, 24, 4}, {7, 28, 4}};
+    VkSpecializationInfo spec = {8, spec_map, sizeof(spec_data), spec_data};
     VkPipelineShaderStageRequiredSubgroupSizeCreateInfo rss = {
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO};
     rss.requiredSubgroupSize = g.subgroup;
@@ -708,6 +710,7 @@ ctx_t* create(const config_t& cfg, std::string& err) {
     g->lit_root = cfg.lit_root;
     g->dist_root = cfg.dist_root;
     g->lits = cfg.literal_rounds;
+    g->checks = cfg.bounds_checks;
     g->load_chunk = cfg.load_chunk_tiles;
     g->read_threads = cfg.read_threads;
     if (!init_device(*g, cfg) || !make_pipeline(*g)) {
@@ -729,6 +732,7 @@ ctx_t* attach(VkInstance instance, VkPhysicalDevice phys, VkDevice dev, PFN_vkGe
     g->lit_root = cfg.lit_root;
     g->dist_root = cfg.dist_root;
     g->lits = cfg.literal_rounds;
+    g->checks = cfg.bounds_checks;
     g->load_chunk = cfg.load_chunk_tiles;
     g->read_threads = cfg.read_threads;
     g->instance = instance;

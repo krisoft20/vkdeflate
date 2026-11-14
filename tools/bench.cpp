@@ -1006,6 +1006,8 @@ int main(int argc, char** argv) {
             a.cfg.verbose = true;
         else if (s == "-lits" && more)
             a.cfg.literal_rounds = atoi(argv[++i]);
+        else if (s == "-nochecks")
+            a.cfg.bounds_checks = false;
         else if (s == "-load")
             a.load = true;
         else if (s == "-read-threads" && more)
@@ -1024,7 +1026,7 @@ int main(int argc, char** argv) {
     }
     if (a.files.empty()) {
         printf("usage: bench <file.gdz>... | -list <file> [-rounds N] [-warm N] [-ms N] [-csv out.csv | -csvdir folder] [-nolayer] [-direct] [-regions]\n"
-               "       [-root N] [-droot N] [-ring N] [-pad N] [-x N] [-tile-count N] [-lits 0|1] [-v] [-load] [-load-rounds N] [-chunk N] [-read-threads N] [-idle-ms N]\n");
+               "       [-root N] [-droot N] [-ring N] [-pad N] [-x N] [-tile-count N] [-lits 0|1] [-nochecks] [-v] [-load] [-load-rounds N] [-chunk N] [-read-threads N] [-idle-ms N]\n");
         return 1;
     }
 
