@@ -4,10 +4,12 @@ cd /d %~dp0
 rem bench.cmd        builds vkdeflate, fetches and compresses the Silesia corpus, decodes it on the GPU and
 rem                  writes results\<gpu>.csv and results\<gpu>.txt
 rem bench.cmd -khr   also builds Khronos's memory decompression layer and decodes every stream with it too
+rem bench.cmd -prep  stops after the corpus and the streams, for check.cmd
 rem Close other programs that use the GPU first: kernel times move by 10 % and more when it is shared.
 rem The corpus is downloaded to test\silesia (66 MB); set SILESIA to a folder that already holds the twelve files.
 rem The GDeflate reference encoder (Microsoft's DirectStorage repository with NVIDIA's libdeflate fork) and the
-rem Khronos layer (Vulkan-ExtensionLayer, which needs python) are cloned and built in third_party_build.
+rem Khronos layer (Vulkan-ExtensionLayer, which needs python) are cloned and built in third_party_build, at the
+rem commits in tools\third_party.sh.
 rem In a release package, which has no CMakeLists.txt, bench and the encoder come built.
 call "%~dp0tools\busy.cmd"
 if errorlevel 1 exit /b 1
@@ -21,6 +23,7 @@ call :corpus
 if errorlevel 1 exit /b 1
 call :vectors
 if errorlevel 1 exit /b 1
+if /i "%1"=="-prep" exit /b 0
 if /i not "%1"=="-khr" goto :run
 call :khr_layer
 if errorlevel 1 exit /b 1
@@ -46,9 +49,7 @@ exit /b 0
 :encoder
 if exist third_party_build\DirectStorage\GDeflate\3rdparty\libdeflate\libdeflate.h goto :build_encoder
 echo cloning the gdeflate reference encoder
-if not exist third_party_build\DirectStorage\.git git clone --depth 1 https://github.com/microsoft/DirectStorage third_party_build\DirectStorage
-if errorlevel 1 exit /b 1
-git -C third_party_build\DirectStorage submodule update --init --depth 1 GDeflate/3rdparty/libdeflate
+call "%~dp0tools\fetch.cmd" directstorage
 if errorlevel 1 exit /b 1
 :build_encoder
 call "%~dp0tools\gdref\build.cmd"
@@ -68,7 +69,7 @@ echo test\vectors\%1.l6.gdz>>test\vectors\silesia.txt
 exit /b 0
 
 :khr_layer
-if not exist third_party_build\Vulkan-ExtensionLayer\CMakeLists.txt git clone --depth 1 https://github.com/KhronosGroup/Vulkan-ExtensionLayer third_party_build\Vulkan-ExtensionLayer
+if not exist third_party_build\Vulkan-ExtensionLayer\CMakeLists.txt call "%~dp0tools\fetch.cmd" layer
 if errorlevel 1 exit /b 1
 call "%~dp0tools\vsenv.cmd"
 if errorlevel 1 exit /b 1

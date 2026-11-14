@@ -13,13 +13,14 @@ From the source:
 what the shader compiler made of the kernel (registers, shared memory). Open a pull request or an issue with both
 files.
 
-Wanted most: RDNA 4 cards (RX 9000 series), where the kernel regressed and I have no card to test on, and any Linux
-GPU, NVIDIA or Intel card, which have never run it. Without `-khr` the script skips the Khronos layer and needs no
-python. The README table and the chart are redrawn from the CSV by `python tools\plot.py`; run it or leave it to me.
+Wanted most: any NVIDIA or Intel card and any Linux GPU, which have never run it. Without `-khr` the script skips
+the Khronos layer and needs no python. The README table and the chart are redrawn from the CSV by
+`python tools\plot.py`; run it or leave it to me.
 
 ## Something failed
 
-Open an issue with:
+A crash, a hang or a write outside the output on a broken stream goes to [`SECURITY.md`](SECURITY.md), not to a
+public issue. Anything else: open an issue with:
 
 - the GPU and the driver version;
 - the last lines the script printed;
@@ -35,14 +36,9 @@ is where a slow card usually differs.
 
 - Style: snake_case, `_t` types, no comments except `TODO`, small flat functions. Match the file you are in.
 - No code from the GDeflate reference implementations. The decoders are written from `docs/FORMAT.md`.
-- After a change to `src\tile.comp` these have to pass (`bench.cmd` creates the streams):
-
-      build\gdz.exe -list test\vectors\silesia.txt -gpu
-      build\gdz.exe -fuzz test\vectors\xml.l6.gdz -n 1000 -gpu
-      build\attach_test.exe test\vectors\xml.l6.gdz
-      cmake --build build --target single_header
-      build\single_test.exe test\vectors\xml.l6.gdz
-
+- After a change to `src\` run `check.cmd` and post its last line in the pull request. It runs on your GPU what
+  CI cannot: the Silesia streams and a fuzz run against the CPU decoder with both literal-round settings, the
+  attach path, the single header, the C interface, the layer and `load()`. About a minute.
 - A change to `src\tile.comp` needs `glslc`, from the Vulkan SDK or as `-DGLSLC=path` in `VKDEFLATE_CMAKE_ARGS`.
   `single_header` also refreshes `prebuilt\tile_spv.inc`; commit both. CI fails when they are older than `src\`
   (`python tools\amalgamate.py --check`).

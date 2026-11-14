@@ -4,6 +4,9 @@ on:
   push:
     tags: ['v*']
 
+permissions:
+  contents: read
+
 jobs:
   package:
     strategy:
@@ -21,10 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: single header and prebuilt shader match src
+        run: python tools/amalgamate.py --check
+
       - name: reference encoder
-        run: |
-          git clone --depth 1 https://github.com/microsoft/DirectStorage third_party_build/DirectStorage
-          git -C third_party_build/DirectStorage submodule update --init --depth 1 GDeflate/3rdparty/libdeflate
+        run: sh tools/fetch.sh directstorage
 
       - name: build
         if: runner.os == 'Windows'
@@ -54,14 +58,14 @@ jobs:
           cp $DS/GDeflate/3rdparty/libdeflate/COPYING $P/licenses/libdeflate.txt
           if [ "$RUNNER_OS" = "Windows" ]; then
               cp bench.cmd $P/
-              cp tools/busy.cmd tools/vsenv.cmd $P/tools/
+              cp tools/busy.cmd tools/vsenv.cmd tools/fetch.cmd tools/third_party.sh $P/tools/
               cp build/bench.exe build/gdz.exe $P/build/
               cp build/gdz.exe gdz-windows.exe
               cp third_party_build/gdref/build/gdref.exe $P/third_party_build/gdref/build/
               RUN='bench.cmd'
           else
               cp bench.sh $P/
-              cp tools/busy.sh $P/tools/
+              cp tools/busy.sh tools/fetch.sh tools/third_party.sh $P/tools/
               cp build/bench build/gdz $P/build/
               cp build/gdz gdz-linux
               cp third_party_build/gdref/build/gdref $P/third_party_build/gdref/build/
@@ -116,4 +120,6 @@ jobs:
           fi
           cat notes.txt
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.txt
-          gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz dist/gdz-* single_include/vkdeflate.h single_include/vkdeflate_c.h --clobber
+          cp single_include/vkdeflate.h single_include/vkdeflate_c.h dist/
+          (cd dist && sha256sum *.zip *.tar.gz gdz-* vkdeflate.h vkdeflate_c.h > SHA256SUMS && cat SHA256SUMS)
+          gh release upload "$GITHUB_REF_NAME" dist/*.zip dist/*.tar.gz dist/gdz-* dist/vkdeflate.h dist/vkdeflate_c.h dist/SHA256SUMS --clobber

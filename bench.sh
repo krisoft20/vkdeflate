@@ -5,7 +5,8 @@
 # Close other programs that use the GPU first: kernel times move by 10 % and more when it is shared.
 # The corpus is downloaded to test/silesia (66 MB); SILESIA may name a folder that already holds the twelve files.
 # The GDeflate reference encoder (Microsoft's DirectStorage repository with NVIDIA's libdeflate fork) and the
-# Khronos layer (Vulkan-ExtensionLayer, which needs python) are cloned and built in third_party_build;
+# Khronos layer (Vulkan-ExtensionLayer, which needs python) are cloned and built in third_party_build, at the
+# commits in tools/third_party.sh;
 # GDREF_BUILD and LAYER_BUILD may name other build folders. In a release package, which has no CMakeLists.txt,
 # bench and the encoder come built.
 set -e
@@ -29,8 +30,7 @@ DS=third_party_build/DirectStorage
 if [ -f CMakeLists.txt ]; then
     if [ ! -f "$DS/GDeflate/3rdparty/libdeflate/libdeflate.h" ]; then
         echo "cloning the gdeflate reference encoder"
-        [ -d "$DS/.git" ] || git clone --depth 1 https://github.com/microsoft/DirectStorage "$DS"
-        git -C "$DS" submodule update --init --depth 1 GDeflate/3rdparty/libdeflate
+        sh tools/fetch.sh directstorage
     fi
     [ -f "$GDREF_BUILD/CMakeCache.txt" ] || cmake -S tools/gdref -B "$GDREF_BUILD" -DCMAKE_BUILD_TYPE=Release
     cmake --build "$GDREF_BUILD"
@@ -46,7 +46,7 @@ done
 L=third_party_build/Vulkan-ExtensionLayer
 LAYER_BUILD=${LAYER_BUILD:-$L/build}
 if [ "$1" = "-khr" ]; then
-    [ -f "$L/CMakeLists.txt" ] || git clone --depth 1 https://github.com/KhronosGroup/Vulkan-ExtensionLayer "$L"
+    [ -f "$L/CMakeLists.txt" ] || sh tools/fetch.sh layer
     [ -f "$LAYER_BUILD/CMakeCache.txt" ] || cmake -S "$L" -B "$LAYER_BUILD" -D UPDATE_DEPS=ON -D CMAKE_BUILD_TYPE=Release -D BUILD_TESTS=OFF
     cmake --build "$LAYER_BUILD" --target VkLayer_khronos_memory_decompression
 fi

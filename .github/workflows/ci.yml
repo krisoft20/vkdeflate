@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     strategy:
@@ -31,9 +34,7 @@ jobs:
         run: ./build.sh
 
       - name: reference encoder
-        run: |
-          git clone --depth 1 https://github.com/microsoft/DirectStorage third_party_build/DirectStorage
-          git -C third_party_build/DirectStorage submodule update --init --depth 1 GDeflate/3rdparty/libdeflate
+        run: sh tools/fetch.sh directstorage
 
       - name: build the reference encoder
         if: runner.os == 'Windows'
@@ -62,3 +63,16 @@ jobs:
               done
           done
           build/gdz -fuzz test/ci/mixed.l6.gdz -n 300
+
+      - name: cpu decoder under address and undefined behaviour sanitizers
+        if: runner.os == 'Linux'
+        run: |
+          cmake -B build-asan -DCMAKE_BUILD_TYPE=RelWithDebInfo "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer" "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined"
+          cmake --build build-asan --target gdz
+          for f in text spirv binary mixed zeros random; do
+              for level in 1 6 12; do
+                  build-asan/gdz test/ci/$f.l$level.gdz -ref test/ci/$f
+              done
+          done
+          build-asan/gdz -fuzz test/ci/mixed.l6.gdz -n 2000
+          build-asan/gdz -fuzz test/ci/text.l12.gdz -n 2000 -seed 7

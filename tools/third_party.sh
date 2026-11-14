@@ -1,0 +1,3 @@
+# commits that tools/fetch.sh and tools\fetch.cmd check out
+DIRECTSTORAGE=303a7d239e27c615281d6304ed13f01dc35061ef
+EXTENSION_LAYER=38ced57f063a288ecd4f401523638b7bdb3ac9d2
