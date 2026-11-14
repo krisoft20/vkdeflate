@@ -18,7 +18,8 @@ overrun and input overrun. The input index stays clamped. With checks on the ISA
 | per stream | | -6.7 to +9.3 %, median -3.8 % |
 | twelve Silesia streams at level 6, median | | -3.4 % |
 
-The level 0 streams got slower (sao +9.3 %, mr +5.7 %, x-ray +4.8 %).
+The level 0 streams show +4.8 to +9.3 % (sao, mr, x-ray). They take about 0.1 ms each and move by up to 10 %
+between identical builds, so this is noise.
 
 ## load(), file to device-local buffer
 
