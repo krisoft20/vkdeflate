@@ -230,7 +230,7 @@ def chart_residency():
     s.save('residency.svg', 'Line chart: kernel time rises as residency drops from 8 to 2 waves per SIMD, for three streams.')
 
 
-def grouped(groups, series, name, title, sub, desc, unit, label_first=False):
+def grouped(groups, series, name, title, sub, desc, unit, labels=0):
     left, right, top, ph, bw = 56, 20, 100, 240, 20
     vmax = max(v for _, vals in groups for v in vals)
     tk = ticks(vmax)
@@ -249,8 +249,8 @@ def grouped(groups, series, name, title, sub, desc, unit, label_first=False):
         for si, v in enumerate(vals):
             x = x0 + si * (bw + 2)
             s.bar_v(x, bw, base, base - v * sy, series[si][0], '%s, %s: %s %s' % (label, series[si][1], num(v), unit))
-            if label_first and si == 0:
-                s.text(x + bw / 2, base - v * sy - 6, num(v, 1), 'p', 11, 'middle')
+            if si < labels:
+                s.text(x + bw / 2, base - v * sy - 6, '%.1f' % v if v < 10 else num(v, 1), 'p' if si == 0 else 's', 11, 'middle')
         s.text(x0 + gw / 2, base + 18, label, 's', 12, 'middle')
     s.line(left, base, W - right, base, 'axis')
     s.save(name, desc)
@@ -263,7 +263,8 @@ def chart_lds():
     groups = [('%s (%s)' % (r['stream'].split(' first')[0], r['tiles']), [float(r['kb4_ms']), float(r['kb3_ms']), float(r['kb2_5_ms'])])
               for r in data]
     grouped(groups, [('o1', '4 KB, 8 waves per SIMD'), ('o2', '3 KB, 10 waves'), ('o3', '2.5 KB, 12 waves')], 'lds.svg',
-            '3 KB of shared memory against 4 KB and 2.5 KB', 'kernel ms per stream (tiles) for three shared-memory budgets, RX 6650 XT',
+            '3 KB of shared memory: up to 15 % faster than 4 KB, within 3 % of 2.5 KB',
+            'kernel ms per stream (tiles) for three shared memory budgets, RX 6650 XT',
             'Grouped bars: kernel time for 4 KB, 3 KB and 2.5 KB of shared memory on five streams.', 'ms')
 
 
@@ -276,9 +277,9 @@ def chart_cpu_gpu():
         mb = float(r['out_mb'])
         groups.append((r['stream'].replace('_albedo', ''), [mb / float(r['gpu_kernel_ms']), mb / float(r['gpu_e2e_ms']), mb / float(r['cpu6_ms'])]))
     grouped(groups, [('c1', 'GPU kernel'), ('c2', 'GPU, end to end into host memory'), ('c3', 'CPU reference decoder, 6 threads')],
-            'cpu_gpu.svg', 'Decode rate: GPU kernel, GPU into host memory, CPU with 6 threads',
+            'cpu_gpu.svg', 'Copied back to host memory, GPU output falls to 3 to 6 GB/s',
             'GB/s of output per stream, RX 6650 XT over PCIe 4.0 x8 and a Ryzen 5 5600X',
-            'Grouped bars: GPU kernel, GPU end to end and CPU six threads in GB/s for six streams.', 'GB/s', label_first=True)
+            'Grouped bars: GPU kernel, GPU end to end and CPU six threads in GB/s for six streams.', 'GB/s', labels=3)
 
 
 def chart_load():

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 388" width="760" height="388" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
-<title id="t">Decode rate: GPU kernel, GPU into host memory, CPU with 6 threads</title>
+<title id="t">Copied back to host memory, GPU output falls to 3 to 6 GB/s</title>
 <desc id="d">Grouped bars: GPU kernel, GPU end to end and CPU six threads in GB/s for six streams.</desc>
 <style>
 .bg{fill:#0d1117}.p{fill:#f0efec}.s{fill:#c3c2b7}.m{fill:#898781}
@@ -11,7 +11,7 @@
 .box{fill:#1a1a19;stroke:#383835;stroke-width:1}.hi{fill:#0d366b;stroke:#3987e5;stroke-width:1}
 </style>
 <rect width="760" height="388" rx="8" class="bg"/>
-<text x="16.0" y="24.0" class="p" font-size="15" font-weight="600" text-anchor="start">Decode rate: GPU kernel, GPU into host memory, CPU with 6 threads</text>
+<text x="16.0" y="24.0" class="p" font-size="15" font-weight="600" text-anchor="start">Copied back to host memory, GPU output falls to 3 to 6 GB/s</text>
 <text x="16.0" y="43.0" class="s" font-size="12" font-weight="400" text-anchor="start">GB/s of output per stream, RX 6650 XT over PCIe 4.0 x8 and a Ryzen 5 5600X</text>
 <rect x="16.0" y="55.0" width="10.0" height="10.0" rx="2" class="c1"></rect>
 <text x="31.0" y="64.0" class="s" font-size="12" font-weight="400" text-anchor="start">GPU kernel</text>
@@ -34,32 +34,44 @@
 <path d="M81.0,340.0 V280.3 Q81.0,276.3 85.0,276.3 H97.0 Q101.0,276.3 101.0,280.3 V340.0 Z" class="c1"><title>mozilla, GPU kernel: 26.53 GB/s</title></path>
 <text x="91.0" y="270.3" class="p" font-size="11" font-weight="400" text-anchor="middle">26.5</text>
 <path d="M103.0,340.0 V334.5 Q103.0,330.5 107.0,330.5 H119.0 Q123.0,330.5 123.0,334.5 V340.0 Z" class="c2"><title>mozilla, GPU, end to end into host memory: 3.94 GB/s</title></path>
+<text x="113.0" y="324.5" class="s" font-size="11" font-weight="400" text-anchor="middle">3.9</text>
 <path d="M125.0,340.0 V339.0 Q125.0,338.0 126.0,338.0 H144.0 Q145.0,338.0 145.0,339.0 V340.0 Z" class="c3"><title>mozilla, CPU reference decoder, 6 threads: 0.81 GB/s</title></path>
+<text x="135.0" y="332.0" class="s" font-size="11" font-weight="400" text-anchor="middle">0.8</text>
 <text x="113.0" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">mozilla</text>
 <path d="M195.0,340.0 V282.9 Q195.0,278.9 199.0,278.9 H211.0 Q215.0,278.9 215.0,282.9 V340.0 Z" class="c1"><title>webster, GPU kernel: 25.46 GB/s</title></path>
 <text x="205.0" y="272.9" class="p" font-size="11" font-weight="400" text-anchor="middle">25.5</text>
 <path d="M217.0,340.0 V334.4 Q217.0,330.4 221.0,330.4 H233.0 Q237.0,330.4 237.0,334.4 V340.0 Z" class="c2"><title>webster, GPU, end to end into host memory: 3.99 GB/s</title></path>
+<text x="227.0" y="324.4" class="s" font-size="11" font-weight="400" text-anchor="middle">4.0</text>
 <path d="M239.0,340.0 V339.0 Q239.0,338.0 240.0,338.0 H258.0 Q259.0,338.0 259.0,339.0 V340.0 Z" class="c3"><title>webster, CPU reference decoder, 6 threads: 0.85 GB/s</title></path>
+<text x="249.0" y="332.0" class="s" font-size="11" font-weight="400" text-anchor="middle">0.8</text>
 <text x="227.0" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">webster</text>
 <path d="M309.0,340.0 V125.5 Q309.0,121.5 313.0,121.5 H325.0 Q329.0,121.5 329.0,125.5 V340.0 Z" class="c1"><title>provinces.bin, GPU kernel: 91.02 GB/s</title></path>
 <text x="319.0" y="115.5" class="p" font-size="11" font-weight="400" text-anchor="middle">91</text>
 <path d="M331.0,340.0 V328.8 Q331.0,324.8 335.0,324.8 H347.0 Q351.0,324.8 351.0,328.8 V340.0 Z" class="c2"><title>provinces.bin, GPU, end to end into host memory: 6.34 GB/s</title></path>
+<text x="341.0" y="318.8" class="s" font-size="11" font-weight="400" text-anchor="middle">6.3</text>
 <path d="M353.0,340.0 V334.0 Q353.0,330.0 357.0,330.0 H369.0 Q373.0,330.0 373.0,334.0 V340.0 Z" class="c3"><title>provinces.bin, CPU reference decoder, 6 threads: 4.18 GB/s</title></path>
+<text x="363.0" y="324.0" class="s" font-size="11" font-weight="400" text-anchor="middle">4.2</text>
 <text x="341.0" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">provinces.bin</text>
 <path d="M423.0,340.0 V249.4 Q423.0,245.4 427.0,245.4 H439.0 Q443.0,245.4 443.0,249.4 V340.0 Z" class="c1"><title>skin.tex, GPU kernel: 39.4 GB/s</title></path>
 <text x="433.0" y="239.4" class="p" font-size="11" font-weight="400" text-anchor="middle">39.4</text>
 <path d="M445.0,340.0 V332.5 Q445.0,328.5 449.0,328.5 H461.0 Q465.0,328.5 465.0,332.5 V340.0 Z" class="c2"><title>skin.tex, GPU, end to end into host memory: 4.8 GB/s</title></path>
+<text x="455.0" y="322.5" class="s" font-size="11" font-weight="400" text-anchor="middle">4.8</text>
 <path d="M467.0,340.0 V338.5 Q467.0,337.1 468.5,337.1 H485.5 Q487.0,337.1 487.0,338.5 V340.0 Z" class="c3"><title>skin.tex, CPU reference decoder, 6 threads: 1.21 GB/s</title></path>
+<text x="477.0" y="331.1" class="s" font-size="11" font-weight="400" text-anchor="middle">1.2</text>
 <text x="455.0" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">skin.tex</text>
 <path d="M537.0,340.0 V289.5 Q537.0,285.5 541.0,285.5 H553.0 Q557.0,285.5 557.0,289.5 V340.0 Z" class="c1"><title>human.portrait, GPU kernel: 22.69 GB/s</title></path>
 <text x="547.0" y="279.5" class="p" font-size="11" font-weight="400" text-anchor="middle">22.7</text>
 <path d="M559.0,340.0 V334.7 Q559.0,330.7 563.0,330.7 H575.0 Q579.0,330.7 579.0,334.7 V340.0 Z" class="c2"><title>human.portrait, GPU, end to end into host memory: 3.89 GB/s</title></path>
+<text x="569.0" y="324.7" class="s" font-size="11" font-weight="400" text-anchor="middle">3.9</text>
 <path d="M581.0,340.0 V338.9 Q581.0,337.8 582.1,337.8 H599.9 Q601.0,337.8 601.0,338.9 V340.0 Z" class="c3"><title>human.portrait, CPU reference decoder, 6 threads: 0.93 GB/s</title></path>
+<text x="591.0" y="331.8" class="s" font-size="11" font-weight="400" text-anchor="middle">0.9</text>
 <text x="569.0" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">human.portrait</text>
 <path d="M651.0,340.0 V284.6 Q651.0,280.6 655.0,280.6 H667.0 Q671.0,280.6 671.0,284.6 V340.0 Z" class="c1"><title>terrain.tex, GPU kernel: 24.75 GB/s</title></path>
 <text x="661.0" y="274.6" class="p" font-size="11" font-weight="400" text-anchor="middle">24.7</text>
 <path d="M673.0,340.0 V336.6 Q673.0,333.2 676.4,333.2 H689.6 Q693.0,333.2 693.0,336.6 V340.0 Z" class="c2"><title>terrain.tex, GPU, end to end into host memory: 2.85 GB/s</title></path>
+<text x="683.0" y="327.2" class="s" font-size="11" font-weight="400" text-anchor="middle">2.9</text>
 <path d="M695.0,340.0 V339.5 Q695.0,339.0 695.5,339.0 H714.5 Q715.0,339.0 715.0,339.5 V340.0 Z" class="c3"><title>terrain.tex, CPU reference decoder, 6 threads: 0.4 GB/s</title></path>
+<text x="705.0" y="333.0" class="s" font-size="11" font-weight="400" text-anchor="middle">0.4</text>
 <text x="683.0" y="358.0" class="s" font-size="12" font-weight="400" text-anchor="middle">terrain.tex</text>
 <line x1="56.0" y1="340.0" x2="740.0" y2="340.0" class="axis"/>
 </svg>
