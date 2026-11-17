@@ -12,16 +12,18 @@
   <a href="docs/blog.md"><img alt="Write-up" src="https://img.shields.io/badge/docs-write--up-E91E63?style=for-the-badge"></a>
 </p>
 
-GPU decompression of GDeflate for Vulkan on any vendor's card, in one MIT header. No driver extension needed.
-An encoder, a file loader and a Vulkan layer are included.
+vkdeflate decompresses game assets on the graphics card instead of the CPU, through Vulkan, on any vendor's card.
+It is one MIT header and needs no driver extension. An encoder, a file loader and a Vulkan layer are included.
 
 | **[Blog](docs/blog.md)** | **[Format](docs/FORMAT.md)** | **[Kernel](docs/DESIGN.md)** |
 |:---:|:---:|:---:|
 | how it was built and measured, with charts | GDeflate 1.0 on two pages | how the shader decodes a tile, and its knobs |
 
-GDeflate is the format behind DirectStorage and RTX IO. Vulkan has an extension for it,
+The assets are GDeflate streams, the format behind DirectStorage and RTX IO: a file is cut into 64 KB tiles that a
+graphics card decodes side by side. Vulkan has an extension for it,
 `VK_EXT_memory_decompression`, but so far only NVIDIA's driver is known to implement it. vkdeflate is a compute shader and a small
-host library that decode the same streams on AMD, Intel and anything else with Vulkan 1.2.
+host library that decode the same streams on AMD, Intel and anything else with Vulkan 1.2. It is meant for
+Vulkan engines that ship GDeflate assets and for DirectStorage titles ported natively to Linux or the Steam Deck.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/rates-dark.svg">
@@ -34,18 +36,6 @@ On the RX 9070 XT, measured on the twelve Silesia streams, it is 1.47x to 2.9x f
 VolcanStorage is a GLSL port of Microsoft's reference shader. As shipped it does not finish on the
 RX 6650 XT, so it was measured after four fixes ([notebook](docs/notebook.md#volcanstorage)).
 How this was measured, and where it does not hold: [the write-up](docs/blog.md).
-
-**For you if**
-
-- your Vulkan engine ships GDeflate assets and you want them decoded on AMD and Intel GPUs too;
-- you are porting a DirectStorage title natively to Linux or the Steam Deck and want to keep its packs;
-- you want to understand the format: [`docs/FORMAT.md`](docs/FORMAT.md) and a readable CPU decoder come with it.
-
-**Not for you if**
-
-- you are on Direct3D 12 on Windows: DirectStorage already does this;
-- your loading time is not spent in decompression, which is most games. GPU decompression only takes that one
-  cost off the CPU.
 
 ## Use it
 
@@ -240,6 +230,8 @@ A card that is not in this table is the most useful thing you can add: open a pu
   GPU is done and takes at most 4 GB per call.
 - GDeflate compresses like zlib. zstd and Oodle pack tighter; the larger files are the price of a format a GPU
   can decode.
+- On Direct3D 12 on Windows DirectStorage already does this.
+- GPU decompression only takes decompression off the CPU. In most games loading time is not spent there.
 
 ## More
 
