@@ -1,0 +1,57 @@
+title: vkdeflate
+url: https://krisoft20.github.io
+baseurl: /vkdeflate
+repo: https://github.com/krisoft20/vkdeflate
+
+plugins:
+  - jekyll-optional-front-matter
+  - jekyll-relative-links
+  - jekyll-titles-from-headings
+
+exclude:
+  - data
+
+kramdown:
+  smart_quotes: ["apos", "apos", "quot", "quot"]
+
+defaults:
+  - scope:
+      path: blog.md
+    values:
+      layout: default
+      permalink: /blog.html
+      nav: Write-up
+      title: Writing a GDeflate decoder as a Vulkan compute shader
+      description: >-
+        How vkdeflate was built and measured on an AMD Radeon RX 6650 XT: the kernel, what made it faster,
+        three bugs, and the Khronos layer on the same data.
+  - scope:
+      path: FORMAT.md
+    values:
+      layout: default
+      permalink: /format.html
+      nav: Format
+      title: GDeflate 1.0, the format on two pages
+      description: >-
+        GDeflate 1.0 written down from the reference encoder and decoders: the stream header, 64 KB tiles,
+        32 lanes, blocks, alphabets and what a decoder checks.
+  - scope:
+      path: DESIGN.md
+    values:
+      layout: default
+      permalink: /kernel.html
+      nav: Kernel
+      title: Kernel notes for the vkdeflate compute shader
+      description: >-
+        How the vkdeflate compute shader decodes a GDeflate tile: one subgroup of 32 per tile, a round,
+        the copies, shared memory and the tuning knobs.
+  - scope:
+      path: notebook.md
+    values:
+      layout: default
+      permalink: /notebook.html
+      nav: Notebook
+      title: vkdeflate notebook
+      description: >-
+        What was tried in vkdeflate and how it came out, in tables: kernel times per stream on an
+        RX 6650 XT and an RX 9070 XT.

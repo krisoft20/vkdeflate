@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vkdeflate: GDeflate GPU decompression on any Vulkan GPU</title>
+<meta name="description" content="GDeflate decoder as a Vulkan compute shader, in one MIT header. GPU decompression of DirectStorage and RTX IO assets on any Vulkan 1.2 GPU, no driver extension.">
+<link rel="canonical" href="https://krisoft20.github.io/vkdeflate/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="vkdeflate">
+<meta property="og:title" content="vkdeflate: GDeflate on any Vulkan GPU">
+<meta property="og:description" content="GPU decompression of GDeflate for Vulkan on any vendor's card, in one MIT header. No driver extension needed.">
+<meta property="og:url" content="https://krisoft20.github.io/vkdeflate/">
+<meta property="og:image" content="https://krisoft20.github.io/vkdeflate/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="vkdeflate: GDeflate on any Vulkan GPU. 14.7 GB/s on an RX 6650 XT, 15.9 GB/s on an RX 9070 XT.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131313" media="(prefers-color-scheme: dark)">
+<!-- Google Search Console: the verification meta tag goes here -->
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/courier-prime-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/courier-prime-700.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/site.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "vkdeflate",
+  "description": "GDeflate decoder as a Vulkan compute shader. GPU decompression of DirectStorage and RTX IO assets on any Vulkan 1.2 GPU, without VK_EXT_memory_decompression. Single header, MIT.",
+  "url": "https://krisoft20.github.io/vkdeflate/",
+  "codeRepository": "https://github.com/krisoft20/vkdeflate",
+  "programmingLanguage": ["C++", "GLSL"],
+  "runtimePlatform": "Vulkan 1.2",
+  "license": "https://opensource.org/licenses/MIT",
+  "keywords": "GDeflate, Vulkan, compute shader, GPU decompression, DirectStorage, RTX IO, VK_EXT_memory_decompression",
+  "author": { "@type": "Person", "name": "krisoft20", "url": "https://github.com/krisoft20" }
+}
+</script>
+</head>
+<body>
+<div class="sheet">
+
+<header>
+  <div class="head">
+    <p>vkdeflate<br>Single header, C++17<br>Vulkan 1.2 or newer</p>
+    <p>krisoft20<br>MIT license<br>November 2026</p>
+  </div>
+  <h1>GDeflate on Any Vulkan GPU</h1>
+</header>
+
+<main>
+
+<section class="abstract" aria-labelledby="abstract">
+  <h2 id="abstract">Abstract</h2>
+  <p>Games ship their assets compressed. vkdeflate unpacks them on the graphics card through Vulkan, on any vendor's card, with no driver extension. The format is GDeflate, the one behind DirectStorage and RTX IO. On an AMD Radeon RX 6650 XT the Silesia test files decode at 14.7&nbsp;GB/s. The Khronos layer on the same card with the same data: 5.9&nbsp;GB/s.</p>
+  <p class="acts">
+    <a class="act" href="https://github.com/krisoft20/vkdeflate/releases/latest/download/vkdeflate.h">Download vkdeflate.h</a>
+    <a href="https://github.com/krisoft20/vkdeflate">Source on GitHub</a>
+  </p>
+</section>
+
+<nav class="abstract" aria-labelledby="contents">
+  <h2 id="contents">Table of Contents</h2>
+  <ol class="toc" role="list">
+    <li><a href="#how"><span class="t">1.  How it works</span><span class="dots" aria-hidden="true"></span><span aria-hidden="true">1</span></a></li>
+    <li><a href="#rates"><span class="t">2.  Measured on two cards</span><span class="dots" aria-hidden="true"></span><span aria-hidden="true">2</span></a></li>
+    <li><a href="#use"><span class="t">3.  Use it</span><span class="dots" aria-hidden="true"></span><span aria-hidden="true">3</span></a></li>
+    <li><a href="#documents"><span class="t">4.  Documents and references</span><span class="dots" aria-hidden="true"></span><span aria-hidden="true">3</span></a></li>
+  </ol>
+</nav>
+
+<section class="body" aria-labelledby="how">
+  <h2 id="how">1.  How it works</h2>
+  <figure class="fig" id="fig1">
+    <div role="img" aria-label="A box of 156 characters, one per 64 KB tile of the test file dickens. Every tile is decoded. One tile alone takes 0.52 ms, all 156 in one dispatch take 0.585 ms.">
+<pre class="wide" aria-hidden="true">  one file, 156 tiles of 64 KB
++----------------------------------------------------+
+|<span class="tiles">####################################################</span>|
+|<span class="tiles">####################################################</span>|
+|<span class="tiles">####################################################</span>|
++----------------------------------------------------+
+  one tile alone ............ 0.52 ms
+  all 156 in one dispatch ... 0.585 ms   decoded <span class="done">156</span> of 156</pre>
+<pre class="narrow" aria-hidden="true">  156 tiles of 64 KB
++--------------------------+
+|<span class="tiles">##########################</span>|
+|<span class="tiles">##########################</span>|
+|<span class="tiles">##########################</span>|
+|<span class="tiles">##########################</span>|
+|<span class="tiles">##########################</span>|
+|<span class="tiles">##########################</span>|
++--------------------------+
+  one tile alone   0.52 ms
+  all 156 at once  0.585 ms
+  decoded <span class="done">156</span> of 156</pre>
+    </div>
+    <figcaption>Figure 1: One test file, dickens, on an RX 6650 XT. Each # is one 64 KB tile. The drawing is slowed down. <button class="again" type="button" hidden>Run it again</button></figcaption>
+  </figure>
+
+  <p>A GDeflate file is cut into pieces of 64 KB called tiles. No tile needs any other, so a graphics card decodes thousands of them at the same time. A CPU gets through a few at a time.</p>
+  <p>The figure is one file of 10 MB, the collected works of Dickens, in 156 tiles. On an RX 6650 XT the first tile alone takes 0.52 ms. All 156 in one dispatch, one job sent to the GPU, take 0.585 ms.</p>
+  <p>In exact terms: GDeflate <a href="#ref2">[2]</a> is DEFLATE <a href="#ref1">[1]</a> cut into independent 64 KB tiles, with the bits of each tile dealt over 32 lanes. vkdeflate decodes one tile per workgroup, one invocation per lane.</p>
+
+  <h3 id="why">Why it exists</h3>
+  <p>DirectStorage does this GPU decompression on Windows with Direct3D 12. Vulkan has an extension for it, <code>VK_EXT_memory_decompression</code> <a href="#ref3">[3]</a>, and so far only NVIDIA's driver is known to have it. vkdeflate is a compute shader with a small host library around it, so all it needs is Vulkan 1.2. Two cases it is made for: a Vulkan engine that ships GDeflate assets, and a DirectStorage title ported natively to Linux or the Steam Deck.</p>
+</section>
+
+<p class="page" aria-hidden="true"><span>krisoft20</span><span>vkdeflate</span><span>[Page 1]</span></p>
+
+<section class="body" aria-labelledby="rates">
+  <h2 id="rates">2.  Measured on two cards</h2>
+  <p>GB/s is the gigabytes of decoded data that come out per second; more is faster.</p>
+
+  <figure class="fig" id="fig2">
+    <div role="img" aria-label="Decode rate in GB/s. RX 6650 XT: vkdeflate 14.7, Khronos layer 5.9, VolcanStorage 2.9. RX 9070 XT: vkdeflate 15.9, Khronos layer 8.4.">
+<pre class="wide" aria-hidden="true"><b>RX 6650 XT</b>
+  vkdeflate     ############################################ 14.7
+<span class="quiet">  Khronos layer ################## 5.9
+  VolcanStorage ######### 2.9</span>
+
+<b>RX 9070 XT</b>
+  vkdeflate     ################################################ 15.9
+<span class="quiet">  Khronos layer ######################### 8.4</span>
+
+                +--------------+--------------+--------------+---
+                0              5             10             15  GB/s</pre>
+<pre class="narrow" aria-hidden="true"><b>RX 6650 XT</b>
+ vkdeflate     ############### 14.7
+<span class="quiet"> Khronos layer ###### 5.9
+ VolcanStorage ### 2.9</span>
+
+<b>RX 9070 XT</b>
+ vkdeflate     ################ 15.9
+<span class="quiet"> Khronos layer ######## 8.4</span>
+
+               +----+----+----+-
+               0    5   10   15 GB/s</pre>
+    </div>
+    <figcaption>Figure 2: Decode rate per card in GB/s of output</figcaption>
+  </figure>
+
+  <p>The data is the Silesia corpus <a href="#ref5">[5]</a>, twelve standard test files, and every decoder on a card got the same compressed bytes. The time counted is the time the GPU spends decoding. The Khronos layer <a href="#ref4">[4]</a> is Khronos's open decoder with NVIDIA's shaders. VolcanStorage is a GLSL port of Microsoft's reference shader; it was measured after four fixes, because as shipped it does not finish on the RX 6650 XT.</p>
+
+  <figure class="tab full">
+  <div class="scroll wide" role="region" aria-labelledby="tab1" tabindex="0">
+  <table class="num" aria-labelledby="tab1">
+    <thead>
+      <tr><td colspan="3"></td><th class="g" colspan="3" scope="colgroup">RX 6650 XT</th><th class="g" colspan="3" scope="colgroup">RX 9070 XT</th></tr>
+      <tr><th scope="col">file</th><th scope="col">tiles</th><th scope="col">MB</th><th class="g" scope="col">vkdeflate</th><th scope="col">layer</th><th scope="col">ratio</th><th class="g" scope="col">vkdeflate</th><th scope="col">layer</th><th scope="col">ratio</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>dickens</td><td>156</td><td>10.2</td><td class="g">0.585</td><td>2.641</td><td>4.51</td><td class="g">0.619</td><td>1.817</td><td>2.94</td></tr>
+      <tr><td>mozilla</td><td>782</td><td>51.2</td><td class="g">1.954</td><td>3.460</td><td>1.77</td><td class="g">1.385</td><td>2.068</td><td>1.49</td></tr>
+      <tr><td>mr</td><td>153</td><td>10.0</td><td class="g">0.694</td><td>2.614</td><td>3.77</td><td class="g">0.777</td><td>1.835</td><td>2.36</td></tr>
+      <tr><td>nci</td><td>512</td><td>33.6</td><td class="g">0.692</td><td>1.163</td><td>1.68</td><td class="g">0.399</td><td>0.683</td><td>1.71</td></tr>
+      <tr><td>ooffice</td><td>94</td><td>6.2</td><td class="g">1.270</td><td>2.392</td><td>1.88</td><td class="g">1.403</td><td>2.064</td><td>1.47</td></tr>
+      <tr><td>osdb</td><td>154</td><td>10.1</td><td class="g">0.648</td><td>1.459</td><td>2.25</td><td class="g">0.673</td><td>1.040</td><td>1.55</td></tr>
+      <tr><td>reymont</td><td>102</td><td>6.6</td><td class="g">0.625</td><td>1.749</td><td>2.80</td><td class="g">0.709</td><td>1.279</td><td>1.80</td></tr>
+      <tr><td>samba</td><td>330</td><td>21.6</td><td class="g">0.705</td><td>2.007</td><td>2.85</td><td class="g">0.772</td><td>1.441</td><td>1.87</td></tr>
+      <tr><td>sao</td><td>111</td><td>7.3</td><td class="g">0.995</td><td>2.222</td><td>2.23</td><td class="g">1.096</td><td>1.720</td><td>1.57</td></tr>
+      <tr><td>webster</td><td>633</td><td>41.5</td><td class="g">1.810</td><td>3.326</td><td>1.84</td><td class="g">0.743</td><td>1.799</td><td>2.42</td></tr>
+      <tr><td>x-ray</td><td>130</td><td>8.5</td><td class="g">1.045</td><td>3.482</td><td>3.33</td><td class="g">1.156</td><td>2.543</td><td>2.20</td></tr>
+      <tr><td>xml</td><td>82</td><td>5.3</td><td class="g">0.570</td><td>1.377</td><td>2.42</td><td class="g">0.644</td><td>1.232</td><td>1.91</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="narrow">
+    <table class="num">
+      <caption>RX 6650 XT</caption>
+      <thead>
+        <tr><th scope="col">file</th><th scope="col">vkdeflate</th><th scope="col">layer</th><th scope="col">ratio</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>dickens</td><td>0.585</td><td>2.641</td><td>4.51</td></tr>
+        <tr><td>mozilla</td><td>1.954</td><td>3.460</td><td>1.77</td></tr>
+        <tr><td>mr</td><td>0.694</td><td>2.614</td><td>3.77</td></tr>
+        <tr><td>nci</td><td>0.692</td><td>1.163</td><td>1.68</td></tr>
+        <tr><td>ooffice</td><td>1.270</td><td>2.392</td><td>1.88</td></tr>
+        <tr><td>osdb</td><td>0.648</td><td>1.459</td><td>2.25</td></tr>
+        <tr><td>reymont</td><td>0.625</td><td>1.749</td><td>2.80</td></tr>
+        <tr><td>samba</td><td>0.705</td><td>2.007</td><td>2.85</td></tr>
+        <tr><td>sao</td><td>0.995</td><td>2.222</td><td>2.23</td></tr>
+        <tr><td>webster</td><td>1.810</td><td>3.326</td><td>1.84</td></tr>
+        <tr><td>x-ray</td><td>1.045</td><td>3.482</td><td>3.33</td></tr>
+        <tr><td>xml</td><td>0.570</td><td>1.377</td><td>2.42</td></tr>
+      </tbody>
+    </table>
+    <table class="num">
+      <caption>RX 9070 XT</caption>
+      <thead>
+        <tr><th scope="col">file</th><th scope="col">vkdeflate</th><th scope="col">layer</th><th scope="col">ratio</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>dickens</td><td>0.619</td><td>1.817</td><td>2.94</td></tr>
+        <tr><td>mozilla</td><td>1.385</td><td>2.068</td><td>1.49</td></tr>
+        <tr><td>mr</td><td>0.777</td><td>1.835</td><td>2.36</td></tr>
+        <tr><td>nci</td><td>0.399</td><td>0.683</td><td>1.71</td></tr>
+        <tr><td>ooffice</td><td>1.403</td><td>2.064</td><td>1.47</td></tr>
+        <tr><td>osdb</td><td>0.673</td><td>1.040</td><td>1.55</td></tr>
+        <tr><td>reymont</td><td>0.709</td><td>1.279</td><td>1.80</td></tr>
+        <tr><td>samba</td><td>0.772</td><td>1.441</td><td>1.87</td></tr>
+        <tr><td>sao</td><td>1.096</td><td>1.720</td><td>1.57</td></tr>
+        <tr><td>webster</td><td>0.743</td><td>1.799</td><td>2.42</td></tr>
+        <tr><td>x-ray</td><td>1.156</td><td>2.543</td><td>2.20</td></tr>
+        <tr><td>xml</td><td>0.644</td><td>1.232</td><td>1.91</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption id="tab1">Table 1: Kernel time per file in ms; less is faster. Ratio is the layer's time over vkdeflate's.</figcaption>
+  </figure>
+
+  <p>Read from disk and decoded into a GPU buffer, the twelve files, 212 MB, take 20 ms when the files are in the OS cache and 60 ms when they are not (RX 6650 XT, NVMe drive).</p>
+  <p>How it was measured and where it does not hold is in <a href="blog.html">the write-up</a>. To add your card, run <code>bench.cmd</code> or <code>./bench.sh</code> from the <code>vkdeflate-bench</code> package of the <a href="https://github.com/krisoft20/vkdeflate/releases/latest">latest release</a> and send the CSV.</p>
+</section>
+
+<p class="page" aria-hidden="true"><span>krisoft20</span><span>vkdeflate</span><span>[Page 2]</span></p>
+
+<section class="body" aria-labelledby="use">
+  <h2 id="use">3.  Use it</h2>
+  <p>The whole library is one C++ header. Copy <a href="https://github.com/krisoft20/vkdeflate/blob/main/single_include/vkdeflate.h"><code>vkdeflate.h</code></a> into your project, or use the CMake target or the vcpkg port.</p>
+<pre><code>// in one .cpp
+#define VKDEFLATE_IMPLEMENTATION
+#include "vkdeflate.h"
+
+std::string err;
+vkdeflate::config_t cfg;
+vkdeflate::ctx_t* ctx = vkdeflate::attach(
+    instance, phys, device, vkGetInstanceProcAddr, cfg, err);
+
+vkdeflate::load_t item;
+// or item.data and item.size
+item.path = "rock_albedo.gdz";
+// or item.buffer
+item.image = image;
+item.extent = {2048, 2048, 1};
+vkdeflate::load(ctx, queue, queue_family, &amp;item, 1, err);</code></pre>
+  <p>The <a href="https://github.com/krisoft20/vkdeflate#use-it">README</a> has every step, the other ways in and the limits. <a href="https://github.com/krisoft20/vkdeflate/tree/main/examples">examples/</a> has five short programs.</p>
+</section>
+
+<section class="body" aria-labelledby="documents">
+  <h2 id="documents">4.  Documents and references</h2>
+  <ul>
+    <li><a href="blog.html">Write-up</a>: how it was built and measured, with charts.</li>
+    <li><a href="format.html">Format</a>: GDeflate 1.0 on two pages.</li>
+    <li><a href="kernel.html">Kernel</a>: how the shader decodes a tile, and its knobs.</li>
+    <li><a href="notebook.html">Notebook</a>: what was tried and the numbers.</li>
+  </ul>
+
+  <h3 id="references">References</h3>
+  <p class="ref" id="ref1">[1]&nbsp;&nbsp;Deutsch, P., "DEFLATE Compressed Data Format Specification version 1.3", <a href="https://www.rfc-editor.org/rfc/rfc1951">RFC 1951</a>, May 1996.</p>
+  <p class="ref" id="ref2">[2]&nbsp;&nbsp;Microsoft, <a href="https://github.com/microsoft/DirectStorage">DirectStorage</a> repository, <code>GDeflate/</code>: the reference encoder, decoder and shaders.</p>
+  <p class="ref" id="ref3">[3]&nbsp;&nbsp;Khronos Group, <a href="https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_memory_decompression.html"><code>VK_EXT_memory_decompression</code></a>, Vulkan reference pages.</p>
+  <p class="ref" id="ref4">[4]&nbsp;&nbsp;Khronos Group, <a href="https://github.com/KhronosGroup/Vulkan-ExtensionLayer">Vulkan-ExtensionLayer</a>, <code>layers/decompression</code>.</p>
+  <p class="ref" id="ref5">[5]&nbsp;&nbsp;Deorowicz, S., <a href="https://sun.aei.polsl.pl/~sdeor/index.php?page=silesia">Silesia compression corpus</a>.</p>
+  <p>No code was copied from any of these; the decoders and the encoder are written from <a href="format.html">the format page</a>.</p>
+
+  <h3 id="author">Author's address</h3>
+  <p>krisoft20<br><a href="https://github.com/krisoft20/vkdeflate">https://github.com/krisoft20/vkdeflate</a></p>
+  <p>MIT, see <a href="https://github.com/krisoft20/vkdeflate/blob/main/LICENSE">LICENSE</a>. Copyright (c) 2026 krisoft20.</p>
+</section>
+
+</main>
+
+<p class="page" aria-hidden="true"><span>krisoft20</span><span>vkdeflate</span><span>[Page 3]</span></p>
+
+</div>
+
+<script>
+(function () {
+  var fig = document.getElementById('fig1');
+  if (!fig || !('IntersectionObserver' in window)) return;
+
+  var again = fig.querySelector('.again');
+  var ramp = '.:-=+*';
+  var tiles = 156, ticks = 34, step = 70, timer = 0;
+  var views = [].map.call(fig.querySelectorAll('pre'), function (pre) {
+    return { rows: pre.querySelectorAll('.tiles'), done: pre.querySelector('.done') };
+  });
+
+  function draw(p) {
+    var done = 0, i;
+    for (i = 0; i < tiles; i++) if (p[i] >= 1) done++;
+    views.forEach(function (v) {
+      var n = 0;
+      [].forEach.call(v.rows, function (row) {
+        var s = '', len = row.textContent.length, k;
+        for (k = 0; k < len; k++, n++) s += p[n] >= 1 ? '#' : ramp.charAt(Math.floor(p[n] * ramp.length));
+        row.textContent = s;
+      });
+      v.done.textContent = ('  ' + done).slice(-3);
+    });
+  }
+
+  function run() {
+    var need = [], t = 0, i;
+    for (i = 0; i < tiles; i++) need.push(0.7 + Math.random() * 0.3);
+    need[Math.floor(Math.random() * tiles)] = 1;
+    clearInterval(timer);
+    again.hidden = true;
+    timer = setInterval(function () {
+      t++;
+      draw(need.map(function (n) { return Math.min(1, t / ticks / n); }));
+      if (t >= ticks) {
+        clearInterval(timer);
+        again.hidden = false;
+      }
+    }, step);
+  }
+
+  again.addEventListener('click', run);
+
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    again.textContent = 'Run the drawing';
+    again.hidden = false;
+    return;
+  }
+
+  var seen = new IntersectionObserver(function (entries) {
+    if (!entries[0].isIntersecting) return;
+    seen.disconnect();
+    run();
+  }, { threshold: 0.8 });
+  seen.observe(fig.querySelector('[role="img"]'));
+})();
+</script>
+</body>
+</html>
